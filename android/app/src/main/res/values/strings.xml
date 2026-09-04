@@ -112,7 +112,8 @@
     <string name="settings_test_ok">Connecté en tant que %1$s</string>
     <string name="settings_test_ok_sub">Réponse en %1$d ms</string>
     <string name="settings_test_ko">Connexion impossible</string>
-    <string name="settings_invalid_url">URL invalide : http(s):// … et un / final.</string>
+    <string name="settings_invalid_url">URL invalide : http(s)://hôte:port/ avec un / final.</string>
+    <string name="settings_http_not_private">http:// n\'est accepté que vers ton réseau local (192.168.x.x, 10.x.x.x, 172.16-31.x.x, .local). Sinon, https://.</string>
 
     <string name="error_generic">Erreur : %1$s</string>
 
@@ -181,4 +182,15 @@
     <string name="error_outdated_server">Requête refusée (422) : le serveur ne connaît pas cette option. Mets-le à jour (git pull, docker compose up -d --build).</string>
     <string name="error_server">Erreur serveur (%1$d). Regarde les logs du conteneur.</string>
     <string name="error_http">Erreur %1$d.</string>
+
+    <!-- Deux groupes : dans l'enseigne, puis ailleurs -->
+    <string name="alt_in_store">Mieux chez %1$s</string>
+    <string name="alt_any">Mieux notés</string>
+    <string name="alt_elsewhere">Dans d\'autres enseignes</string>
+    <string name="alt_none_store">Rien de mieux connu chez %1$s pour l\'instant.</string>
+    <string name="alt_none_any">Rien de mieux connu pour l\'instant.</string>
+    <string name="reco_in_store">Chez %1$s</string>
+    <string name="reco_any">Tous les produits connus</string>
+    <string name="reco_none_store">Rien de connu chez %1$s pour cette famille. Les produits ci-dessous viennent d\'autres enseignes.</string>
+    <string name="reco_none_store_alone">Rien de connu chez %1$s pour cette famille.</string>
 </resources>

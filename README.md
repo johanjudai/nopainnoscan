@@ -87,13 +87,17 @@ Toutes les routes sauf `/health` exigent le header `X-Api-Key`.
 
 Un scan avec `store=` marque le produit comme « vu dans cette enseigne ». Une
 alternative = même famille Open Food Facts (`pnns_groups_2`), mieux notée **pour
-ton profil**, vue dans l'enseigne indiquée ; s'il n'y en a aucune, repli sur
-toutes les enseignes (`alternatives_scope: "any"`).
+ton profil**. Avec une enseigne, la réponse sépare `alternatives` (vues dans
+l'enseigne) et `alternatives_elsewhere` (vues ailleurs seulement) ; l'app affiche
+les premières en tête et les secondes sous un séparateur. Même découpage pour
+`/recommendations` (`items` / `items_elsewhere`).
 
 Pour ne pas partir d'un cache vide, le serveur amorce chaque famille au premier
 besoin : il importe depuis Open Food Facts les produits populaires de la famille
 (filtrés sur l'enseigne quand elle est connue d'OFF), avec leurs enseignes
-(`stores_tags`), au plus une fois par semaine par couple famille / enseigne.
+(`stores_tags`) et leur photo, au plus une fois par semaine par couple famille /
+enseigne. Un échec réseau n'est pas mémorisé (nouvel essai au prochain appel), et
+`SEED_VERSION` dans `config.py` permet d'invalider tous les amorçages.
 
 ### Profil : on saisit des mesures, le serveur déduit le reste
 
@@ -145,8 +149,8 @@ Projet Android Studio complet dans `android/` (minSdk 26, compileSdk 34).
 
 ```bash
 cd android
-./gradlew assembleDebug        # → app/build/outputs/apk/debug/app-debug.apk
-adb install app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleDebug        # → app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
+adb install app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
 ```
 
 Au premier lancement : **Réglages** → URL de l'API (`http://…:8088/`) + clé API,
@@ -179,9 +183,9 @@ dans le canvas Claude Design lié au projet.
 - **Réglages** : URL de l'API, clé, test de connexion.
 
 Sécurité côté app : clé API en stockage privé (`allowBackup=false`), un seul
-client HTTP partagé avec timeouts courts. L'API est appelée en `http://` sur le
-LAN, d'où `usesCleartextTraffic="true"` dans le manifest : à retirer dès que tu
-passes en TLS via ton reverse proxy.
+client HTTP partagé avec timeouts courts. L'API peut être appelée en `http://`,
+mais les Réglages ne l'acceptent que vers une adresse privée (LAN) ; ailleurs,
+`https://` est exigé. L'APK release est minifié (R8) et livré pour arm64 seulement.
 
 ---
 

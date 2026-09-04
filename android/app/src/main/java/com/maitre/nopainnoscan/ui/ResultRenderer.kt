@@ -63,7 +63,7 @@ class ResultRenderer(
         binding.tvComplement.visibility = if (complement == null) View.GONE else View.VISIBLE
         if (complement != null) {
             binding.tvComplement.text = context.getString(
-                R.string.meal_complement, complement.grams, complement.name.lowercase(),
+                R.string.meal_complement, complement.grams, complement.name.orEmpty().lowercase(),
                 complement.kcal, Fmt.dec1(complement.protein_g),
             )
         }
@@ -100,24 +100,25 @@ class ResultRenderer(
     }
 
     private fun renderAlternatives(score: ScoreDto, store: Store?) {
-        val container = binding.altContainer
+        val here = score.alternatives.orEmpty()
+        val elsewhere = score.alternatives_elsewhere.orEmpty()
+
+        // 1) En tête : ce qui est connu dans l'enseigne (ou tout, sans enseigne).
+        binding.tvAltTitle.text = if (store != null) context.getString(R.string.alt_in_store, store.label)
+        else context.getString(R.string.alt_any)
+        fillRows(binding.altContainer, here)
+        binding.tvAltEmpty.visibility = if (here.isEmpty()) View.VISIBLE else View.GONE
+        binding.tvAltEmpty.text = if (store != null) context.getString(R.string.alt_none_store, store.label)
+        else context.getString(R.string.alt_none_any)
+
+        // 2) Sous un séparateur : les options vues dans d'autres enseignes.
+        binding.elsewhereGroup.visibility = if (elsewhere.isEmpty()) View.GONE else View.VISIBLE
+        fillRows(binding.elsewhereContainer, elsewhere)
+    }
+
+    private fun fillRows(container: android.widget.LinearLayout, items: List<com.maitre.nopainnoscan.api.AlternativeDto>) {
         container.removeAllViews()
-        val alternatives = score.alternatives.orEmpty()
-        val inStore = score.alternatives_scope == "store" && store != null
-
-        binding.tvAltTitle.text = if (inStore) context.getString(R.string.scanner_alternatives_store, store!!.label)
-        else context.getString(R.string.scanner_alternatives_any)
-
-        if (alternatives.isEmpty()) {
-            binding.tvAltEmpty.visibility = View.VISIBLE
-            binding.tvAltEmpty.text = when {
-                store != null -> context.getString(R.string.scanner_alternatives_empty_store, store.label)
-                else -> context.getString(R.string.scanner_alternatives_empty_any)
-            }
-            return
-        }
-        binding.tvAltEmpty.visibility = View.GONE
-        alternatives.forEach { alt ->
+        items.forEach { alt ->
             val row = ItemAlternativeBinding.inflate(inflater, container, false)
             row.tvName.text = alt.name
             row.tvScore.showScorePill(alt.score, Category.of(alt.category))

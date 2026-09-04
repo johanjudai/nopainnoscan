@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import relationship
 
 from .database import Base
@@ -86,6 +86,7 @@ class AlternativeSeed(Base):
 
     category = Column(String(128), primary_key=True)
     store = Column(String(32), primary_key=True, default="")  # "" = toutes enseignes
+    version = Column(Integer, nullable=False, default=1)
     fetched_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
@@ -93,15 +94,14 @@ class Scan(Base):
     """Historique par utilisateur, score figé au moment du scan."""
 
     __tablename__ = "scans"
+    __table_args__ = (Index("ix_scans_user_created", "user_id", "created_at", "id"),)
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
-    )
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
     store = Column(String(32), nullable=True)
     score = Column(Float, nullable=False)
     category = Column(String(24), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     product = relationship("Product")

@@ -23,22 +23,22 @@ def test_thiriet_is_a_known_store(client, headers):
     assert resp.status_code == 200
 
 
-def test_recommendations_ranked_for_goal_and_store(client, headers):
-    client.post("/scan/manual", params={"store": "lidl"}, json=SAUSAGE, headers=headers)
-    client.post("/scan/manual", params={"store": "lidl"}, json=CHICKEN, headers=headers)
+def test_recommendations_ranked_for_goal_and_store(client, headers, off_product):
+    off_product("Saucisse", "Meat", 320, 12, stores=["lidl"], saturated_fat_100g=11)
+    off_product("Blanc de poulet", "Meat", 110, 23, stores=["lidl"])
 
     resp = client.get(
         "/recommendations", params={"category": "Meat", "store": "lidl"}, headers=headers
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["scope"] == "store"
     assert [i["name"] for i in body["items"]] == ["Blanc de poulet", "Saucisse"]
     assert body["items"][0]["score"] > body["items"][1]["score"]
     assert body["items"][0]["kcal_100g"] == 110
+    assert body["items_elsewhere"] == []
 
 
-def test_recommendations_fall_back_to_any_store_and_seed_off(client, headers, monkeypatch):
+def test_recommendations_split_store_and_elsewhere(client, headers, monkeypatch):
     calls = []
 
     def fake_search(category, store):
@@ -65,9 +65,9 @@ def test_recommendations_fall_back_to_any_store_and_seed_off(client, headers, mo
         "/recommendations", params={"category": "Meat", "store": "thiriet"}, headers=headers
     ).json()
     assert calls == [("Meat", "thiriet")]
-    # Rien de connu chez Thiriet : repli sur tout le cache, qui contient le produit importé.
-    assert body["scope"] == "any"
-    assert [i["name"] for i in body["items"]] == ["Filet de dinde"]
+    # Rien de connu chez Thiriet : la liste principale est vide, le reste part sous « ailleurs ».
+    assert body["items"] == []
+    assert [i["name"] for i in body["items_elsewhere"]] == ["Filet de dinde"]
 
 
 def test_recommendations_reject_unknown_category(client, headers):
@@ -95,7 +95,7 @@ def test_every_store_has_off_tags_and_a_search_query(monkeypatch):
         def json():
             return {"products": []}
 
-    def fake_get(url, params=None):
+    def fake_get(url, params=None, **kw):
         seen.append(params)
         return Empty()
 

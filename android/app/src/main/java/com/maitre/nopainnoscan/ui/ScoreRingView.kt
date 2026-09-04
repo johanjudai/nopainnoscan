@@ -46,6 +46,7 @@ class ScoreRingView @JvmOverloads constructor(
     private val bounds = RectF()
     private var shown = 0f
     private var animator: ValueAnimator? = null
+    private val legend = context.getString(R.string.score_over_100)
 
     fun set(score: Double, color: Int) {
         arc.color = color
@@ -71,6 +72,11 @@ class ScoreRingView @JvmOverloads constructor(
         val cx = width / 2f
         val cy = height / 2f
         canvas.drawText(shown.roundToInt().toString(), cx, cy + number.textSize * 0.2f, number)
-        canvas.drawText(context.getString(R.string.score_over_100), cx, cy + number.textSize * 0.2f + caption.textSize * 1.4f, caption)
+        canvas.drawText(legend, cx, cy + number.textSize * 0.2f + caption.textSize * 1.4f, caption)
+    }
+
+    override fun onDetachedFromWindow() {
+        animator?.cancel()
+        super.onDetachedFromWindow()
     }
 }

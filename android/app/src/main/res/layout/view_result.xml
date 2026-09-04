@@ -184,4 +184,34 @@
         android:layout_height="wrap_content"
         android:lineSpacingMultiplier="1.15"
         android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/elsewhereGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/tonal_2" />
+
+        <TextView
+            android:id="@+id/tvElsewhereTitle"
+            style="@style/Text.Label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="8dp"
+            android:text="@string/alt_elsewhere" />
+
+        <LinearLayout
+            android:id="@+id/elsewhereContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:alpha="0.85"
+            android:orientation="vertical" />
+    </LinearLayout>
 </LinearLayout>

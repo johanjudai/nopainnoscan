@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
 // Miroir des schémas Pydantic du backend : noms snake_case conservés pour Gson.
 // Gson ignore les valeurs par défaut Kotlin : tout champ absent de la réponse arrive null.
 
-data class UserDto(val id: Int, val name: String)
+data class UserDto(val id: Int, val name: String?)
 
 data class ProfileDto(
     val sex: String, // male | female
@@ -44,7 +44,7 @@ data class EstimateDto(
     val protein_target_auto: Int,
     val kcal_target: Int,
     val protein_target_g: Int,
-    val messages: List<MessageDto>,
+    val messages: List<MessageDto>?,
 )
 
 data class ProfileOutDto(
@@ -60,7 +60,7 @@ data class ProfileOutDto(
     val target_body_fat_pct: Double?,
     val daily_kcal_target: Double?,
     val daily_protein_target_g: Double?,
-    val estimate: EstimateDto,
+    val estimate: EstimateDto?,
 )
 
 data class NutrientsDto(
@@ -78,7 +78,7 @@ data class NutrientsDto(
 
 data class AlternativeDto(val product_id: Int, val name: String, val score: Double, val category: String, val image_url: String?)
 
-data class ComplementDto(val name: String, val grams: Int, val kcal: Int, val protein_g: Double)
+data class ComplementDto(val name: String?, val grams: Int, val kcal: Int, val protein_g: Double)
 
 data class MealDto(
     val role: String,
@@ -106,8 +106,8 @@ data class ScoreDto(
     val breakdown: Map<String, Double>,
     val source: String,
     val store: String?,
-    val alternatives: List<AlternativeDto>,
-    val alternatives_scope: String?, // store | any
+    val alternatives: List<AlternativeDto>?, // dans l'enseigne (ou toutes, sans enseigne)
+    val alternatives_elsewhere: List<AlternativeDto>?, // vues ailleurs seulement
     val meal: MealDto?, // null sans profil
 )
 
@@ -137,8 +137,8 @@ data class RecommendationDto(
 data class RecommendationsDto(
     val category: String,
     val store: String?,
-    val scope: String, // store | any
-    val items: List<RecommendationDto>,
+    val items: List<RecommendationDto>?, // dans l'enseigne (ou toutes, sans enseigne)
+    val items_elsewhere: List<RecommendationDto>?, // vues ailleurs seulement
 )
 
 interface NoPainNoScanApi {
@@ -182,32 +182,39 @@ interface NoPainNoScanApi {
  * quand l'URL ou la clé changent dans les réglages.
  */
 object ApiClient {
-    @Volatile private var cached: Pair<String, NoPainNoScanApi>? = null
+    private class Built(val signature: String, val http: OkHttpClient, val api: NoPainNoScanApi)
 
+    @Volatile private var cached: Built? = null
+
+    /** Lève IllegalArgumentException si l'URL enregistrée est inutilisable : appeler sous runCatching. */
     fun get(context: Context): NoPainNoScanApi {
         val prefs = AppPrefs(context)
         val signature = prefs.apiBaseUrl + " " + prefs.apiKey
-        cached?.takeIf { it.first == signature }?.let { return it.second }
+        cached?.takeIf { it.signature == signature }?.let { return it.api }
         return synchronized(this) {
-            cached?.takeIf { it.first == signature }?.second
-                ?: build(prefs.apiBaseUrl, prefs.apiKey).also { cached = signature to it }
+            cached?.takeIf { it.signature == signature }?.api ?: run {
+                // Réglages changés : on libère l'ancien pool avant de remplacer.
+                cached?.http?.let { it.connectionPool.evictAll(); it.dispatcher.executorService.shutdown() }
+                build(signature, prefs.apiBaseUrl, prefs.apiKey).also { cached = it }.api
+            }
         }
     }
 
-    private fun build(baseUrl: String, apiKey: String): NoPainNoScanApi {
+    private fun build(signature: String, baseUrl: String, apiKey: String): Built {
         val http = OkHttpClient.Builder()
             .connectTimeout(4, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS) // premier scan = aller-retour Open Food Facts côté serveur
+            .readTimeout(25, TimeUnit.SECONDS) // premier scan d'une famille = recherche Open Food Facts côté serveur
             .addInterceptor { chain ->
                 chain.proceed(chain.request().newBuilder().header("X-Api-Key", apiKey).build())
             }
             .build()
 
-        return Retrofit.Builder()
+        val api = Retrofit.Builder()
             .baseUrl(baseUrl)
             .client(http)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(NoPainNoScanApi::class.java)
+        return Built(signature, http, api)
     }
 }

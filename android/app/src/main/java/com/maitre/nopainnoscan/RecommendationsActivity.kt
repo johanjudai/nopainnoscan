@@ -76,6 +76,7 @@ class RecommendationsActivity : AppCompatActivity() {
     private fun load() {
         val cat = category ?: return
         loadJob?.cancel()
+        binding.tvScope.visibility = View.VISIBLE
         binding.tvScope.text = getString(R.string.reco_loading)
         loadJob = lifecycleScope.launch {
             val attempt = runCatching {
@@ -83,18 +84,34 @@ class RecommendationsActivity : AppCompatActivity() {
             }
             val result = attempt.getOrNull()
             if (result == null) {
+                binding.tvScope.visibility = View.VISIBLE
                 binding.tvScope.text = ApiErrors.describe(this@RecommendationsActivity, attempt.exceptionOrNull()!!)
                 adapter.submitList(emptyList())
                 return@launch
             }
-            adapter.submitList(result.items)
+            val here = result.items.orEmpty()
+            val elsewhere = result.items_elsewhere.orEmpty()
             val current = store
-            binding.tvScope.text = when {
-                result.items.isEmpty() -> getString(R.string.reco_empty)
-                current != null && result.scope == "store" -> getString(R.string.reco_scope_store, current.label)
-                current != null -> getString(R.string.reco_scope_fallback, current.label)
-                else -> getString(R.string.reco_scope_any)
+            val rows = mutableListOf<RecommendationAdapter.Row>()
+
+            // En tête : l'enseigne choisie (ou tout, sans enseigne).
+            val headTitle = current?.let { getString(R.string.reco_in_store, it.label) } ?: getString(R.string.reco_any)
+            val headSub = when {
+                here.isNotEmpty() || current == null -> null
+                elsewhere.isNotEmpty() -> getString(R.string.reco_none_store, current.label)
+                else -> getString(R.string.reco_none_store_alone, current.label)
             }
+            rows += RecommendationAdapter.Row.Header(headTitle, headSub, withDivider = false)
+            here.forEachIndexed { i, item -> rows += RecommendationAdapter.Row.Item(i + 1, item) }
+
+            // Sous un séparateur : ce qui n'a été vu que dans d'autres enseignes.
+            if (elsewhere.isNotEmpty()) {
+                rows += RecommendationAdapter.Row.Header(getString(R.string.alt_elsewhere), null, withDivider = true)
+                elsewhere.forEachIndexed { i, item -> rows += RecommendationAdapter.Row.Item(i + 1, item) }
+            }
+            adapter.submitList(rows)
+            binding.tvScope.text = if (here.isEmpty() && elsewhere.isEmpty()) getString(R.string.reco_empty) else ""
+            binding.tvScope.visibility = if (binding.tvScope.text.isEmpty()) View.GONE else View.VISIBLE
         }
     }
 }
