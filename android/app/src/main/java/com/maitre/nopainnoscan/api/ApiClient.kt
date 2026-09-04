@@ -78,6 +78,25 @@ data class NutrientsDto(
 
 data class AlternativeDto(val product_id: Int, val name: String, val score: Double, val category: String)
 
+data class ComplementDto(val name: String, val grams: Int, val kcal: Int, val protein_g: Double)
+
+data class MealDto(
+    val role: String,
+    val portion_g: Int,
+    val portion_kcal: Int,
+    val portion_protein_g: Double,
+    val complement: ComplementDto?,
+    val extras: List<String>?,
+    val meal_kcal: Int,
+    val meal_protein_g: Double,
+    val meal_kcal_budget: Int,
+    val meal_protein_target_g: Int,
+    val share_of_day_pct: Int,
+    val daily_kcal_target: Int,
+    val weekly_kcal_target: Int,
+    val note: String,
+)
+
 data class ScoreDto(
     val product_id: Int,
     val product_name: String,
@@ -88,6 +107,7 @@ data class ScoreDto(
     val store: String?,
     val alternatives: List<AlternativeDto>,
     val alternatives_scope: String?, // store | any
+    val meal: MealDto?, // null sans profil
 )
 
 data class ScanDto(

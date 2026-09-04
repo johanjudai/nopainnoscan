@@ -89,6 +89,32 @@ class AlternativeOut(BaseModel):
     category: Category
 
 
+class ComplementOut(BaseModel):
+    name: str
+    grams: int
+    kcal: int
+    protein_g: float
+
+
+class MealOut(BaseModel):
+    """Quantité conseillée pour un repas et complément pour le boucler, selon le profil."""
+
+    role: Literal["protein", "carb", "veg", "fruit", "mixed", "fat", "treat", "drink"]
+    portion_g: int
+    portion_kcal: int
+    portion_protein_g: float
+    complement: ComplementOut | None
+    extras: list[str]
+    meal_kcal: int
+    meal_protein_g: float
+    meal_kcal_budget: int
+    meal_protein_target_g: int
+    share_of_day_pct: int
+    daily_kcal_target: int
+    weekly_kcal_target: int
+    note: str
+
+
 class ScoreOut(BaseModel):
     product_id: int
     product_name: str
@@ -100,6 +126,7 @@ class ScoreOut(BaseModel):
     alternatives: list[AlternativeOut] = []
     # "store" : vues dans l'enseigne demandée ; "any" : repli sur toutes les enseignes.
     alternatives_scope: Literal["store", "any"] = "any"
+    meal: MealOut | None = None  # None sans profil
 
 
 class ScanOut(BaseModel):

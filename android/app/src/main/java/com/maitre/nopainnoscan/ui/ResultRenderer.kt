@@ -13,6 +13,7 @@ import com.maitre.nopainnoscan.Category
 import com.maitre.nopainnoscan.Fmt
 import com.maitre.nopainnoscan.R
 import com.maitre.nopainnoscan.Store
+import com.maitre.nopainnoscan.api.MealDto
 import com.maitre.nopainnoscan.api.ScoreDto
 import com.maitre.nopainnoscan.databinding.ItemAlternativeBinding
 import com.maitre.nopainnoscan.databinding.ViewResultBinding
@@ -42,7 +43,37 @@ class ResultRenderer(
         else context.getString(R.string.scanner_for_goal, goalText)
 
         renderBreakdown(score.breakdown.orEmpty())
+        renderMeal(score.meal)
         renderAlternatives(score, store)
+    }
+
+    private fun renderMeal(meal: MealDto?) {
+        binding.cardMeal.visibility = if (meal == null) View.GONE else View.VISIBLE
+        if (meal == null) return
+        val portionRes = if (meal.role == "drink") R.string.meal_portion_ml else R.string.meal_portion
+        binding.tvPortion.text = context.getString(portionRes, meal.portion_g)
+        binding.tvPortionSub.text = context.getString(
+            R.string.meal_portion_sub, meal.portion_kcal, Fmt.dec1(meal.portion_protein_g)
+        )
+
+        val complement = meal.complement
+        binding.tvComplement.visibility = if (complement == null) View.GONE else View.VISIBLE
+        if (complement != null) {
+            binding.tvComplement.text = context.getString(
+                R.string.meal_complement, complement.grams, complement.name.lowercase(),
+                complement.kcal, Fmt.dec1(complement.protein_g),
+            )
+        }
+        val extras = meal.extras.orEmpty()
+        binding.tvExtras.visibility = if (extras.isEmpty()) View.GONE else View.VISIBLE
+        binding.tvExtras.text = extras.joinToString("\n") { context.getString(R.string.meal_extra, it.lowercase()) }
+
+        binding.tvMealTotal.text = context.getString(R.string.meal_total, Fmt.int(meal.meal_kcal), meal.share_of_day_pct)
+        binding.tvMealTargets.text = context.getString(
+            R.string.meal_targets, Fmt.int(meal.daily_kcal_target), Fmt.int(meal.weekly_kcal_target),
+            meal.meal_protein_target_g,
+        )
+        binding.tvMealNote.text = meal.note
     }
 
     private fun renderBreakdown(breakdown: Map<String, Double>) {

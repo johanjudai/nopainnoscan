@@ -109,6 +109,19 @@ reste est calculé dans `backend/app/body.py` et renvoyé dans `estimate` :
   des `messages` de niveau `info` ou `warning` (sous le métabolisme de base, déficit
   trop agressif, protéines insuffisantes, etc.).
 
+### Repas conseillé
+
+Chaque réponse de scan ou de fiche produit porte un bloc `meal` (si un profil
+existe) calculé dans `backend/app/meal.py` : budget kcal et protéines du repas
+(un tiers de la journée), rôle du produit déduit de sa famille ou de ses macros
+(féculent, source de protéines, plat complet, légume, fruit, matière grasse,
+plaisir, boisson), puis portion conseillée et complément générique pour boucler
+le repas (poisson blanc ou poulet à côté d'un féculent, pommes de terre / riz /
+pâtes selon l'objectif à côté d'une protéine, skyr pour relever un plat complet).
+Le bloc rappelle la part du repas dans la journée et les cibles jour / semaine.
+Il n'y a pas encore de journal de ce qui est réellement mangé : le suivi hebdo
+réel est en roadmap.
+
 Doc interactive : `http://<serveur>:8088/docs`.
 
 ### Dev local
@@ -157,7 +170,10 @@ dans le canvas Claude Design lié au projet.
   produits sans code-barres. Les lignes reconnues sont regroupées par rangée, la première
   valeur après chaque libellé (colonne « pour 100 g ») est retenue ; deux lectures stables
   d'affilée ouvrent un formulaire de vérification avant `POST /scan/manual`.
-- **Fiche produit** : depuis l'historique ou une alternative, note actuelle et alternatives.
+- **Feuille de résultat glissante** : repliée sur la note et le détail, tirée vers le haut
+  elle révèle le repas conseillé (portion + complément) puis les alternatives.
+- **Fiche produit** : depuis l'historique ou une alternative, note actuelle, repas conseillé
+  et alternatives.
 - **Recommandations** : famille de produit, enseigne facultative, liste classée des meilleurs
   produits pour ton objectif.
 - **Réglages** : URL de l'API, clé, test de connexion.
@@ -181,6 +197,8 @@ passes en TLS via ton reverse proxy.
 
 ## Roadmap
 
+- [ ] Journal des repas pour un vrai suivi kcal / protéines à la journée et à la semaine.
+- [ ] Nombre de repas par jour dans le profil (3 pour l'instant).
 - [ ] Catégorie facultative sur les produits saisis par OCR (pour qu'ils aient des alternatives).
 - [ ] Écran historique complet (`GET /scans`, au-delà des 5 derniers).
 - [ ] Migrations (Alembic) dès que le schéma bouge.
