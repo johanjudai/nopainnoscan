@@ -1,0 +1,17 @@
+[project]
+name = "nopainnoscan-api"
+version = "0.1.0"
+description = "API de scoring nutrition orientée sèche / perf, avec cache local Open Food Facts."
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# B008 : `Depends(...)` en valeur par défaut est l'idiome FastAPI.
+ignore = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

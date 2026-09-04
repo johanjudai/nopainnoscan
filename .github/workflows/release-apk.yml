@@ -1,0 +1,134 @@
+name: release-apk
+
+# - Tag `v*`      → APK release-signé (si secrets keystore) attaché à une GitHub Release.
+# - Push sur main → APK debug en artefact (30 jours), pour sideloader la dernière version.
+# - Manuel        → idem push sur main.
+on:
+  push:
+    tags: ['v*']
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & publish APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools build-tools;34.0.0 platforms;android-34'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          # Tag → nom sans le `v` ; sinon label dev depuis le SHA court.
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION_NAME="${GITHUB_REF_NAME#v}"
+            TAG_LABEL="$GITHUB_REF_NAME"
+          else
+            VERSION_NAME="0.0.0-dev"
+            TAG_LABEL="dev-${GITHUB_SHA::7}"
+          fi
+          # versionCode monotone depuis le semver : 1.2.3 → 10203.
+          CORE="${VERSION_NAME%%-*}"
+          IFS='.' read -r MAJOR MINOR PATCH <<<"$CORE"
+          VERSION_CODE=$(( MAJOR * 10000 + MINOR * 100 + PATCH ))
+          [[ "$VERSION_CODE" -lt 1 ]] && VERSION_CODE=1
+          echo "version_name=$VERSION_NAME" | tee -a "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" | tee -a "$GITHUB_OUTPUT"
+          echo "tag_label=$TAG_LABEL"       | tee -a "$GITHUB_OUTPUT"
+
+      - name: Decode release keystore (tag pushes only)
+        id: keystore
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [[ -n "$KEYSTORE_BASE64" && -n "$KEYSTORE_PASSWORD" && -n "$KEY_ALIAS" && -n "$KEY_PASSWORD" ]]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "Pas de keystore configuré : APK debug."
+          fi
+
+      - name: Build release-signed APK
+        if: steps.keystore.outputs.signed == 'true'
+        env:
+          # Secrets via env (pas en args : visibles dans /proc/*/cmdline).
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease --no-daemon \
+            -PversionName="${{ steps.version.outputs.version_name }}" \
+            -PversionCode="${{ steps.version.outputs.version_code }}" \
+            -PRELEASE_STORE_FILE=release.keystore \
+            -PRELEASE_STORE_PASSWORD="$STORE_PASSWORD" \
+            -PRELEASE_KEY_ALIAS="$KEY_ALIAS" \
+            -PRELEASE_KEY_PASSWORD="$KEY_PASSWORD"
+
+      - name: Build debug APK (fallback)
+        if: steps.keystore.outputs.signed != 'true'
+        run: |
+          ./gradlew assembleDebug --no-daemon \
+            -PversionName="${{ steps.version.outputs.version_name }}" \
+            -PversionCode="${{ steps.version.outputs.version_code }}"
+
+      - name: Rename & locate APK
+        id: rename
+        run: |
+          if [[ "${{ steps.keystore.outputs.signed }}" == "true" ]]; then
+            SRC="app/build/outputs/apk/release/app-release.apk"
+          else
+            SRC="app/build/outputs/apk/debug/app-debug.apk"
+          fi
+          APK_NAME="nopainnoscan-${{ steps.version.outputs.tag_label }}.apk"
+          mv "$SRC" "$APK_NAME"
+          ls -lh "$APK_NAME"
+          echo "apk_name=$APK_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Cleanup keystore from runner
+        if: always() && steps.keystore.outputs.signed == 'true'
+        run: rm -f app/release.keystore
+
+      - name: Upload as workflow artifact (push-to-main + manual)
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.rename.outputs.apk_name }}
+          path: android/${{ steps.rename.outputs.apk_name }}
+          retention-days: 30
+
+      - name: Create / update GitHub Release (tag push only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          name: NoPainNoScan ${{ steps.version.outputs.tag_label }}
+          files: android/${{ steps.rename.outputs.apk_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            **APK Android** — `${{ steps.rename.outputs.apk_name }}`
+
+            ${{ steps.keystore.outputs.signed == 'true' && '✅ **Release-signé.**' || '⚠️ **Debug-signé** (pas de keystore configuré). Sideload possible après *Installer des applis inconnues*.' }}
+
+            Installation : télécharger le `.apk` ci-dessous, l'ouvrir depuis le gestionnaire de fichiers ou `adb install <fichier.apk>`.

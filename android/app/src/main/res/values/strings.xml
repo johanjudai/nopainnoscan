@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NoPainNoScan</string>
+
+    <string name="main_scan">Scanner un produit</string>
+    <string name="main_profile">Mon profil / objectifs</string>
+    <string name="main_settings">Réglages (serveur, clé)</string>
+    <string name="main_connected_as">Connecté : %1$s</string>
+    <string name="main_not_configured">Serveur non configuré ou clé invalide</string>
+
+    <string name="scanner_hint">Pointe la caméra vers un code-barres…</string>
+    <string name="scanner_loading">Scan en cours (%1$s)…</string>
+    <string name="scanner_result">%1$s\n%2$s — %3$s/100</string>
+    <string name="scanner_alternatives_title">Mieux dans cette enseigne :</string>
+    <string name="scanner_alternatives_title_any">Mieux, vu ailleurs :</string>
+    <string name="scanner_alternative_line">• %1$s — %2$s/100</string>
+    <string name="scanner_not_found">Produit introuvable (cache local + Open Food Facts).\nTu pourras le rentrer via l\'OCR.</string>
+    <string name="scanner_error">Serveur injoignable : %1$s</string>
+    <string name="store_none">Hors magasin</string>
+    <string name="camera_denied">Permission caméra refusée</string>
+
+    <string name="category_parfait">PARFAIT</string>
+    <string name="category_pas_mal">PAS MAL</string>
+    <string name="category_a_eviter">À ÉVITER</string>
+    <string name="category_a_ne_pas_manger">À NE PAS MANGER</string>
+
+    <string name="profile_weight">Poids (kg)</string>
+    <string name="profile_height">Taille (cm)</string>
+    <string name="profile_current_bf">% masse grasse actuel</string>
+    <string name="profile_target_bf">% masse grasse visé</string>
+    <string name="profile_goal">Objectif (cut / maintenance / bulk)</string>
+    <string name="profile_kcal">Objectif kcal/jour</string>
+    <string name="profile_protein">Objectif protéines (g/jour)</string>
+    <string name="profile_save">Enregistrer</string>
+    <string name="profile_saved">Profil enregistré</string>
+    <string name="profile_invalid">Poids et taille sont obligatoires</string>
+
+    <string name="settings_api_url">URL de l\'API (ex. http://192.168.1.10:8088/)</string>
+    <string name="settings_api_key">Clé API (X-Api-Key)</string>
+    <string name="settings_test">Tester la connexion</string>
+    <string name="settings_save">Enregistrer</string>
+    <string name="settings_saved">Réglages enregistrés</string>
+    <string name="settings_test_ok">OK, connecté en tant que %1$s</string>
+    <string name="settings_test_ko">Échec : %1$s</string>
+    <string name="settings_invalid_url">URL invalide (doit commencer par http:// ou https:// et finir par /)</string>
+
+    <string name="error_generic">Erreur : %1$s</string>
+</resources>

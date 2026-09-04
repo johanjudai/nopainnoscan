@@ -1,0 +1,38 @@
+services:
+  nopainnoscan-db:
+    image: postgres:16-alpine
+    container_name: nopainnoscan-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nopainnoscan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definir POSTGRES_PASSWORD dans .env}
+      POSTGRES_DB: ${POSTGRES_DB:-nopainnoscan}
+    volumes:
+      - nopainnoscan_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nopainnoscan} -d ${POSTGRES_DB:-nopainnoscan}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - nopainnoscan-net
+
+  nopainnoscan-api:
+    build: ./backend
+    container_name: nopainnoscan-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-nopainnoscan}:${POSTGRES_PASSWORD}@nopainnoscan-db:5432/${POSTGRES_DB:-nopainnoscan}
+    depends_on:
+      nopainnoscan-db:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-8088}:8000"
+    networks:
+      - nopainnoscan-net
+
+volumes:
+  nopainnoscan_pgdata:
+
+networks:
+  nopainnoscan-net:

@@ -1,0 +1,23 @@
+name: guard-main
+
+# Seules les PR venant de `dev` peuvent cibler `main`. À déclarer comme
+# required status check sur la protection de main.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  enforce-source-branch:
+    name: Verify PR source is dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check source branch
+        run: |
+          if [ "${{ github.head_ref }}" != "dev" ]; then
+            echo "::error::Les PR vers main doivent venir de 'dev' (source : '${{ github.head_ref }}')."
+            exit 1
+          fi
+          echo "OK: source branch is dev."

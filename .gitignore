@@ -1,0 +1,35 @@
+# --- OS / éditeurs
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+
+# --- Secrets
+.env
+.env.*
+!.env.example
+
+# --- Backend (Python)
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.kotlin/
+android/captures/
+*.apk
+*.aab
+
+# Clés de signature — JAMAIS commit, passées en secrets GitHub Actions.
+*.keystore
+*.jks
