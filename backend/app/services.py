@@ -1,5 +1,6 @@
 """Logique métier partagée entre les routes : cache produit, alternatives, historique."""
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
@@ -8,6 +9,8 @@ from . import models, scoring
 from .config import ALTERNATIVES_LIMIT, SEED_TTL_DAYS
 from .off_client import fetch_product_from_off, search_products
 from .schemas import AlternativeOut, NutrientsIn, RecommendationOut
+
+logger = logging.getLogger(__name__)
 
 
 def get_or_fetch_product(db: Session, barcode: str) -> models.Product | None:
@@ -68,17 +71,26 @@ def seed_alternatives(db: Session, category: str | None, store: str | None) -> N
         if fetched > datetime.now(UTC) - timedelta(days=SEED_TTL_DAYS):
             return
 
-    found = search_products(category, store)
-    known: dict[str, models.Product] = (
-        {
-            p.barcode: p
-            for p in db.query(models.Product)
-            .filter(models.Product.barcode.in_([p["barcode"] for p in found]))
-            .all()
-        }
-        if found
-        else {}
-    )
+    # Au mieux : un import raté ne doit jamais faire échouer le scan qui l'a déclenché.
+    try:
+        with db.begin_nested():
+            _import_products(db, search_products(category, store))
+            db.merge(
+                models.AlternativeSeed(category=category, store=key, fetched_at=datetime.now(UTC))
+            )
+    except Exception:
+        logger.exception("Amorçage OFF impossible pour %s / %s", category, store or "toutes")
+
+
+def _import_products(db: Session, found: list[dict]) -> None:
+    if not found:
+        return
+    known: dict[str, models.Product] = {
+        p.barcode: p
+        for p in db.query(models.Product)
+        .filter(models.Product.barcode.in_([p["barcode"] for p in found]))
+        .all()
+    }
     for data in found:
         barcode = data.pop("barcode")
         existing = known.get(barcode)
@@ -87,8 +99,6 @@ def seed_alternatives(db: Session, category: str | None, store: str | None) -> N
                 existing.image_url = data["image_url"]  # rattrape les fiches importées sans photo
             continue
         known[barcode] = _insert_product(db, barcode=barcode, source="off", data=data)
-
-    db.merge(models.AlternativeSeed(category=category, store=key, fetched_at=datetime.now(UTC)))
     db.flush()
 
 

@@ -75,3 +75,31 @@ def test_recommendations_reject_unknown_category(client, headers):
         client.get("/recommendations", params={"category": "Yolo"}, headers=headers).status_code
         == 422
     )
+
+
+def test_every_store_has_off_tags_and_a_search_query(monkeypatch):
+    """Régression : `thiriet` avait un libellé mais pas de tag OFF -> KeyError en production."""
+    from typing import get_args
+
+    from app import off_client
+    from app.schemas import Store
+    from app.stores import STORE_LABELS, STORE_OFF_TAGS
+
+    assert set(STORE_LABELS) == set(STORE_OFF_TAGS) == set(get_args(Store))
+    seen = []
+
+    class Empty:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"products": []}
+
+    def fake_get(url, params=None):
+        seen.append(params)
+        return Empty()
+
+    monkeypatch.setattr(off_client._client, "get", fake_get)
+    for store in STORE_LABELS:
+        off_client.search_products("Meat", store)
+    assert [p["stores_tags"] for p in seen] == [STORE_OFF_TAGS[s][0] for s in STORE_LABELS]

@@ -20,16 +20,30 @@ _SEARCH_FIELDS = "code,product_name,pnns_groups_2,stores_tags,nutriments,image_f
 _client = httpx.Client(timeout=OFF_TIMEOUT_S, headers={"User-Agent": OFF_USER_AGENT})
 
 
+def _num(value) -> float | None:
+    """OFF renvoie parfois des chaînes ("0,5", "traces", "<1") : jamais de ValueError ici."""
+    if value in (None, ""):
+        return None
+    try:
+        return float(str(value).replace(",", ".").lstrip("<~ "))
+    except ValueError:
+        return None
+
+
 def _parse(product: dict) -> dict | None:
     """Dict prêt pour `Product(**data)` + clé `stores` (à retirer avant insertion)."""
     nutriments = product.get("nutriments") or {}
-    if nutriments.get("energy-kcal_100g") in (None, ""):
+    kcal = _num(nutriments.get("energy-kcal_100g"))
+    if kcal is None:
         return None  # sans kcal, aucun score possible
+    values = {col: _num(nutriments.get(key)) or 0.0 for col, key in _FIELDS.items()}
+    values["kcal_100g"] = kcal
+    image = product.get("image_front_small_url")
     return {
-        "name": (product.get("product_name") or "Produit inconnu")[:255],
-        "category": product.get("pnns_groups_2") or None,
-        "image_url": (product.get("image_front_small_url") or None),
-        **{col: float(nutriments.get(key) or 0) for col, key in _FIELDS.items()},
+        "name": str(product.get("product_name") or "Produit inconnu")[:255],
+        "category": (product.get("pnns_groups_2") or None),
+        "image_url": image[:512] if isinstance(image, str) and image else None,
+        **values,
         "stores": match_store_tags(product.get("stores_tags")),
     }
 

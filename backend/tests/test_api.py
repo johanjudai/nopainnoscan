@@ -301,3 +301,61 @@ def test_seed_backfills_missing_image(client, headers, monkeypatch, db):
     resp = client.post("/scan/manual", json=SAUSAGE, headers=headers).json()
     assert db.query(Product).filter_by(barcode="777").one().image_url == "https://img/777.jpg"
     assert resp["alternatives"][0]["image_url"] == "https://img/777.jpg"
+
+
+def test_seeding_failure_never_breaks_the_scan(client, headers, monkeypatch):
+    def boom(category, store):
+        raise RuntimeError("OFF cassé")
+
+    monkeypatch.setattr(services, "search_products", boom)
+    resp = client.post("/scan/manual", params={"store": "thiriet"}, json=SAUSAGE, headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["alternatives"] == []
+
+
+def test_seeding_with_duplicate_or_bad_rows_is_tolerated(client, headers, monkeypatch, db):
+    from app.models import Product
+
+    row = {
+        "name": "Poulet",
+        "category": "Meat",
+        "kcal_100g": 110,
+        "protein_100g": 23,
+        "carbs_100g": 0,
+        "sugars_100g": 0,
+        "fat_100g": 1,
+        "saturated_fat_100g": 0.3,
+        "fiber_100g": 0,
+        "salt_100g": 0.2,
+        "stores": set(),
+        "image_url": None,
+    }
+    monkeypatch.setattr(
+        services,
+        "search_products",
+        lambda c, s: [{**row, "barcode": "888"}, {**row, "barcode": "888"}],
+    )
+    resp = client.post("/scan/manual", json=SAUSAGE, headers=headers)
+    assert resp.status_code == 200
+    assert db.query(Product).filter_by(barcode="888").count() == 1
+
+
+def test_off_parse_tolerates_non_numeric_values(monkeypatch):
+    payload = {
+        "status": 1,
+        "product": {
+            "product_name": "Eau",
+            "nutriments": {
+                "energy-kcal_100g": "0",
+                "proteins_100g": "traces",
+                "salt_100g": "<0,01",
+                "fat_100g": "0,5",
+            },
+        },
+    }
+    monkeypatch.setattr(off_client._client, "get", lambda url, params=None: FakeResp(payload))
+    data = off_client.fetch_product_from_off("1")
+    assert data["kcal_100g"] == 0
+    assert data["protein_100g"] == 0
+    assert data["salt_100g"] == 0.01
+    assert data["fat_100g"] == 0.5

@@ -24,6 +24,7 @@ STORE_OFF_TAGS: dict[str, tuple[str, ...]] = {
         "carrefour-contact",
         "carrefour-express",
     ),
+    "thiriet": ("thiriet",),
 }
 
 
