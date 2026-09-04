@@ -87,6 +87,7 @@ class AlternativeOut(BaseModel):
     name: str
     score: float
     category: Category
+    image_url: str | None = None
 
 
 class ComplementOut(BaseModel):
@@ -118,6 +119,7 @@ class MealOut(BaseModel):
 class ScoreOut(BaseModel):
     product_id: int
     product_name: str
+    image_url: str | None = None
     category: Category
     score: float  # 0-100
     breakdown: dict[str, float]
@@ -135,6 +137,7 @@ class ScanOut(BaseModel):
     id: int
     product_id: int
     product_name: str
+    image_url: str | None = None
     store: Store | None
     score: float
     category: Category
@@ -151,6 +154,7 @@ class RecommendationOut(BaseModel):
     name: str
     score: float
     category: Category
+    image_url: str | None = None
     kcal_100g: float
     protein_100g: float
 

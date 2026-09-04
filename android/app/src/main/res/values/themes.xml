@@ -178,4 +178,9 @@
         <item name="chipMinHeight">36dp</item>
         <item name="ensureMinTouchTargetSize">false</item>
     </style>
+
+    <style name="Shape.NoPainNoScan.Photo" parent="ShapeAppearance.Material3.Corner.Medium">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">14dp</item>
+    </style>
 </resources>

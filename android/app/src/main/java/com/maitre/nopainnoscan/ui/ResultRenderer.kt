@@ -8,6 +8,7 @@ import android.text.style.StyleSpan
 import android.view.LayoutInflater
 import android.view.View
 import androidx.core.content.ContextCompat
+import coil.load
 import com.google.android.material.chip.Chip
 import com.maitre.nopainnoscan.Category
 import com.maitre.nopainnoscan.Fmt
@@ -36,6 +37,8 @@ class ResultRenderer(
         binding.ring.set(score.score, ContextCompat.getColor(context, category.color))
         binding.chipCategory.showPill(context.getString(category.label), category)
         binding.tvProduct.text = score.product_name
+        binding.ivImage.visibility = if (score.image_url.isNullOrBlank()) View.GONE else View.VISIBLE
+        score.image_url?.let { binding.ivImage.load(it) { crossfade(true) } }
 
         val goalText = context.getString(goalLabelLower(goal))
         val store = Store.fromSlug(score.store)

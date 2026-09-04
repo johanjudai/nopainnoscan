@@ -353,8 +353,7 @@ class ScannerActivity : AppCompatActivity() {
         binding.result.root.visibility = View.GONE
         binding.tvWaiting.text = when ((e as? HttpException)?.code()) {
             404 -> getString(R.string.scanner_not_found)
-            401 -> getString(R.string.scanner_unauthorized)
-            else -> getString(R.string.scanner_error, e.message)
+            else -> ApiErrors.describe(this, e)
         }
         collapseTo(binding.tvWaiting)
     }

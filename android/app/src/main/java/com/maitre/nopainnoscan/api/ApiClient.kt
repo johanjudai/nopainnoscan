@@ -76,7 +76,7 @@ data class NutrientsDto(
     val salt_100g: Double = 0.0,
 )
 
-data class AlternativeDto(val product_id: Int, val name: String, val score: Double, val category: String)
+data class AlternativeDto(val product_id: Int, val name: String, val score: Double, val category: String, val image_url: String?)
 
 data class ComplementDto(val name: String, val grams: Int, val kcal: Int, val protein_g: Double)
 
@@ -100,6 +100,7 @@ data class MealDto(
 data class ScoreDto(
     val product_id: Int,
     val product_name: String,
+    val image_url: String?,
     val category: String, // parfait | pas_mal | a_eviter | a_ne_pas_manger
     val score: Double,
     val breakdown: Map<String, Double>,
@@ -114,6 +115,7 @@ data class ScanDto(
     val id: Int,
     val product_id: Int,
     val product_name: String,
+    val image_url: String?,
     val store: String?,
     val score: Double,
     val category: String,
@@ -129,6 +131,7 @@ data class RecommendationDto(
     val category: String,
     val kcal_100g: Double,
     val protein_100g: Double,
+    val image_url: String?,
 )
 
 data class RecommendationsDto(

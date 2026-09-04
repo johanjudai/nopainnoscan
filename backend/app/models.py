@@ -54,6 +54,7 @@ class Product(Base):
     name = Column(String(255), nullable=False)
     # Famille OFF (pnns_groups_2), sert à chercher des alternatives comparables.
     category = Column(String(128), index=True, nullable=True)
+    image_url = Column(String(512), nullable=True)
 
     kcal_100g = Column(Float, nullable=False)
     protein_100g = Column(Float, nullable=False, default=0)

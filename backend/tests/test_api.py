@@ -225,12 +225,14 @@ def test_off_client_maps_fields_and_stores(monkeypatch):
             "product_name": "Skyr",
             "pnns_groups_2": "Dairy desserts",
             "stores_tags": ["E.Leclerc", "Carrefour Market", "Magasins U"],
+            "image_front_small_url": "https://images.openfoodfacts.org/x/front_fr.200.jpg",
             "nutriments": {"energy-kcal_100g": 63, "proteins_100g": "10.5", "fat_100g": None},
         },
     }
     monkeypatch.setattr(off_client._client, "get", lambda url, params=None: FakeResp(payload))
     data = off_client.fetch_product_from_off("123")
     assert data["name"] == "Skyr"
+    assert data["image_url"].endswith("front_fr.200.jpg")
     assert data["category"] == "Dairy desserts"
     assert data["protein_100g"] == 10.5
     assert data["fat_100g"] == 0
@@ -269,3 +271,33 @@ def test_off_search_builds_store_query(monkeypatch):
     assert seen["stores_tags"] == "e-leclerc"
     assert [r["barcode"] for r in results] == ["42"]
     assert results[0]["stores"] == {"leclerc"}
+
+
+def test_seed_backfills_missing_image(client, headers, monkeypatch, db):
+    from app.models import Product
+
+    def fake_search(category, store):
+        return [
+            {
+                "barcode": "777",
+                "name": "Poulet",
+                "category": "Meat",
+                "kcal_100g": 110,
+                "protein_100g": 23,
+                "carbs_100g": 0,
+                "sugars_100g": 0,
+                "fat_100g": 1,
+                "saturated_fat_100g": 0.3,
+                "fiber_100g": 0,
+                "salt_100g": 0.2,
+                "stores": set(),
+                "image_url": "https://img/777.jpg",
+            },
+        ]
+
+    db.add(Product(barcode="777", name="Poulet", category="Meat", kcal_100g=110, protein_100g=23))
+    db.commit()
+    monkeypatch.setattr(services, "search_products", fake_search)
+    resp = client.post("/scan/manual", json=SAUSAGE, headers=headers).json()
+    assert db.query(Product).filter_by(barcode="777").one().image_url == "https://img/777.jpg"
+    assert resp["alternatives"][0]["image_url"] == "https://img/777.jpg"
