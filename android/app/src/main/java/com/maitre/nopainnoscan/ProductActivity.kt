@@ -33,12 +33,14 @@ class ProductActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             val api = ApiClient.get(this@ProductActivity)
-            val (score, goal) = coroutineScope {
-                val score = async { runCatching { api.product(productId, store?.slug) }.getOrNull() }
+            val (attempt, goal) = coroutineScope {
+                val score = async { runCatching { api.product(productId, store?.slug) } }
                 val goal = async { runCatching { api.getProfile().goal }.getOrNull() }
                 score.await() to goal.await()
             }
+            val score = attempt.getOrNull()
             if (score == null) {
+                binding.tvError.text = ApiErrors.describe(this@ProductActivity, attempt.exceptionOrNull()!!)
                 binding.tvError.visibility = View.VISIBLE
                 binding.result.root.visibility = View.GONE
                 return@launch

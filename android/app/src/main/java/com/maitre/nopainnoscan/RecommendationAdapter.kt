@@ -5,6 +5,7 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import coil.load
 import com.maitre.nopainnoscan.api.RecommendationDto
 import com.maitre.nopainnoscan.databinding.ItemRecommendationBinding
 import kotlin.math.roundToInt
@@ -21,6 +22,7 @@ class RecommendationAdapter(private val onClick: (RecommendationDto) -> Unit) :
         val item = getItem(position)
         val ctx = holder.binding.root.context
         holder.binding.tvRank.text = (position + 1).toString()
+        holder.binding.ivThumb.load(item.image_url) { crossfade(true) }
         holder.binding.tvName.text = item.name
         holder.binding.tvMeta.text = ctx.getString(
             R.string.reco_meta, item.kcal_100g.roundToInt().toString(), Fmt.dec1(item.protein_100g)

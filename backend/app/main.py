@@ -1,13 +1,14 @@
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
-from . import body, meal, models, schemas, scoring, services
+from . import body, meal, migrations, models, schemas, scoring, services
 from .auth import current_user
 from .categories import CATEGORY_LABELS
 from .database import engine, get_db
 from .stores import STORE_LABELS
 
 models.Base.metadata.create_all(bind=engine)
+migrations.run(engine)
 
 app = FastAPI(title="NoPainNoScan API", docs_url="/docs", redoc_url=None)
 
@@ -32,6 +33,7 @@ def _score_response(
     return schemas.ScoreOut(
         product_id=product.id,
         product_name=product.name,
+        image_url=product.image_url,
         source=product.source,
         store=store,
         alternatives=alternatives,
@@ -184,6 +186,7 @@ def scan_history(
             id=s.id,
             product_id=s.product_id,
             product_name=s.product.name,
+            image_url=s.product.image_url,
             store=s.store,
             score=s.score,
             category=s.category,

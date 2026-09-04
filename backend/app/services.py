@@ -69,22 +69,24 @@ def seed_alternatives(db: Session, category: str | None, store: str | None) -> N
             return
 
     found = search_products(category, store)
-    known = (
+    known: dict[str, models.Product] = (
         {
-            code
-            for (code,) in db.query(models.Product.barcode)
+            p.barcode: p
+            for p in db.query(models.Product)
             .filter(models.Product.barcode.in_([p["barcode"] for p in found]))
             .all()
         }
         if found
-        else set()
+        else {}
     )
     for data in found:
         barcode = data.pop("barcode")
-        if barcode in known:
+        existing = known.get(barcode)
+        if existing:
+            if not existing.image_url and data.get("image_url"):
+                existing.image_url = data["image_url"]  # rattrape les fiches importées sans photo
             continue
-        _insert_product(db, barcode=barcode, source="off", data=data)
-        known.add(barcode)
+        known[barcode] = _insert_product(db, barcode=barcode, source="off", data=data)
 
     db.merge(models.AlternativeSeed(category=category, store=key, fetched_at=datetime.now(UTC)))
     db.flush()
@@ -116,7 +118,8 @@ def _better_in_category(
 
     # Le cache reste petit (usage perso) : le scoring en Python sur la famille suffit.
     scored = (
-        AlternativeOut(product_id=p.id, name=p.name, **_score_only(p, goal)) for p in query.all()
+        AlternativeOut(product_id=p.id, name=p.name, image_url=p.image_url, **_score_only(p, goal))
+        for p in query.all()
     )
     better = [alt for alt in scored if alt.score > current_score]
     better.sort(key=lambda alt: alt.score, reverse=True)
@@ -154,6 +157,7 @@ def _ranked_in_category(
             name=p.name,
             kcal_100g=p.kcal_100g,
             protein_100g=p.protein_100g,
+            image_url=p.image_url,
             **_score_only(p, goal),
         )
         for p in query.all()

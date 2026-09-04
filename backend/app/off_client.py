@@ -14,7 +14,7 @@ _FIELDS = {
     "fiber_100g": "fiber_100g",
     "salt_100g": "salt_100g",
 }
-_SEARCH_FIELDS = "code,product_name,pnns_groups_2,stores_tags,nutriments"
+_SEARCH_FIELDS = "code,product_name,pnns_groups_2,stores_tags,nutriments,image_front_small_url"
 
 # Client partagé : pool de connexions réutilisé entre les requêtes.
 _client = httpx.Client(timeout=OFF_TIMEOUT_S, headers={"User-Agent": OFF_USER_AGENT})
@@ -28,6 +28,7 @@ def _parse(product: dict) -> dict | None:
     return {
         "name": (product.get("product_name") or "Produit inconnu")[:255],
         "category": product.get("pnns_groups_2") or None,
+        "image_url": (product.get("image_front_small_url") or None),
         **{col: float(nutriments.get(key) or 0) for col, key in _FIELDS.items()},
         "stores": match_store_tags(product.get("stores_tags")),
     }

@@ -78,11 +78,12 @@ class RecommendationsActivity : AppCompatActivity() {
         loadJob?.cancel()
         binding.tvScope.text = getString(R.string.reco_loading)
         loadJob = lifecycleScope.launch {
-            val result = runCatching {
+            val attempt = runCatching {
                 ApiClient.get(this@RecommendationsActivity).recommendations(cat.slug, store?.slug)
-            }.getOrNull()
+            }
+            val result = attempt.getOrNull()
             if (result == null) {
-                binding.tvScope.text = getString(R.string.reco_error)
+                binding.tvScope.text = ApiErrors.describe(this@RecommendationsActivity, attempt.exceptionOrNull()!!)
                 adapter.submitList(emptyList())
                 return@launch
             }

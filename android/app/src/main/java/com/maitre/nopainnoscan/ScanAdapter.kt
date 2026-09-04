@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import coil.load
 import com.maitre.nopainnoscan.api.ScanDto
 import com.maitre.nopainnoscan.databinding.ItemScanBinding
 import java.time.OffsetDateTime
@@ -22,6 +23,7 @@ class ScanAdapter(private val onClick: (ScanDto) -> Unit) : ListAdapter<ScanDto,
         val ctx = holder.binding.root.context
         val store = Store.fromSlug(scan.store)?.label ?: ctx.getString(R.string.store_none)
         holder.binding.tvName.text = scan.product_name
+        holder.binding.ivThumb.load(scan.image_url) { crossfade(true) }
         holder.binding.tvMeta.text = ctx.getString(R.string.main_scan_meta, store, relative(scan.created_at))
         holder.binding.tvScore.showScorePill(scan.score, Category.of(scan.category))
         holder.binding.root.setOnClickListener { onClick(scan) }

@@ -172,4 +172,13 @@
     <string name="meal_total">Repas ≈ %1$s kcal · %2$d %% de ta journée</string>
     <string name="meal_targets">Cibles : %1$s kcal / jour · %2$s kcal / semaine · %3$d g de protéines par repas</string>
     <string name="meal_swipe_hint">Glisse vers le haut pour le repas conseillé et les alternatives</string>
+
+    <!-- Erreurs réseau / serveur -->
+    <string name="error_offline">Serveur injoignable. Vérifie le Wi-Fi et l\'adresse dans Réglages.</string>
+    <string name="error_timeout">Le serveur met trop de temps à répondre (Open Food Facts lent ?). Réessaie.</string>
+    <string name="error_unauthorized">Clé API refusée. Vérifie les réglages.</string>
+    <string name="error_not_found">Introuvable.</string>
+    <string name="error_outdated_server">Requête refusée (422) : le serveur ne connaît pas cette option. Mets-le à jour (git pull, docker compose up -d --build).</string>
+    <string name="error_server">Erreur serveur (%1$d). Regarde les logs du conteneur.</string>
+    <string name="error_http">Erreur %1$d.</string>
 </resources>
