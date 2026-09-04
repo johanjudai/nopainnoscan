@@ -24,11 +24,17 @@ class AppPrefs(context: Context) {
         get() = Store.fromSlug(prefs.getString(KEY_STORE, null))
         set(value) = prefs.edit().putString(KEY_STORE, value?.slug).apply()
 
+    /** Dernière famille consultée dans les recommandations (slug backend). */
+    var lastCategory: String?
+        get() = prefs.getString(KEY_CATEGORY, null)
+        set(value) = prefs.edit().putString(KEY_CATEGORY, value).apply()
+
     val isConfigured: Boolean get() = apiKey.isNotBlank()
 
     private companion object {
         const val KEY_API_URL = "api_base_url"
         const val KEY_API_KEY = "api_key"
         const val KEY_STORE = "store"
+        const val KEY_CATEGORY = "last_category"
     }
 }

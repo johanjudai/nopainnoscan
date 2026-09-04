@@ -33,7 +33,7 @@
     <color name="warn_icon">#C98A1C</color>
 
     <color name="scanner_scrim">#AA1B1816</color>
-    <color name="chip_store_unchecked">#29FAF7F2</color>
+    <color name="chip_store_unchecked">#BF1F1B17</color>
 
     <color name="ic_launcher_background">#E0694F</color>
     <color name="ic_launcher_foreground">#FFF3EE</color>

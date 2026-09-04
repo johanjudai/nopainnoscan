@@ -87,6 +87,7 @@ data class ScoreDto(
     val source: String,
     val store: String?,
     val alternatives: List<AlternativeDto>,
+    val alternatives_scope: String?, // store | any
 )
 
 data class ScanDto(
@@ -99,7 +100,35 @@ data class ScanDto(
     val created_at: String,
 )
 
+data class CategoryDto(val slug: String, val label: String)
+
+data class RecommendationDto(
+    val product_id: Int,
+    val name: String,
+    val score: Double,
+    val category: String,
+    val kcal_100g: Double,
+    val protein_100g: Double,
+)
+
+data class RecommendationsDto(
+    val category: String,
+    val store: String?,
+    val scope: String, // store | any
+    val items: List<RecommendationDto>,
+)
+
 interface NoPainNoScanApi {
+    @GET("categories")
+    suspend fun categories(): List<CategoryDto>
+
+    @GET("recommendations")
+    suspend fun recommendations(
+        @Query("category") category: String,
+        @Query("store") store: String?,
+        @Query("limit") limit: Int = 20,
+    ): RecommendationsDto
+
     @GET("me")
     suspend fun me(): UserDto
 
@@ -120,6 +149,9 @@ interface NoPainNoScanApi {
 
     @GET("scans")
     suspend fun history(@Query("limit") limit: Int = 50): List<ScanDto>
+
+    @GET("products/{id}")
+    suspend fun product(@Path("id") id: Int, @Query("store") store: String?): ScoreDto
 }
 
 /**

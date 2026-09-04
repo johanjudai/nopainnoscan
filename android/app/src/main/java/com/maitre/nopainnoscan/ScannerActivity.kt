@@ -2,13 +2,10 @@ package com.maitre.nopainnoscan
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.Typeface
 import android.os.Bundle
-import android.text.SpannableStringBuilder
-import android.text.style.ForegroundColorSpan
-import android.text.style.StyleSpan
 import android.util.Size
 import android.view.View
+import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -31,39 +28,52 @@ import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.maitre.nopainnoscan.api.ApiClient
+import com.maitre.nopainnoscan.api.NutrientsDto
 import com.maitre.nopainnoscan.api.ScoreDto
 import com.maitre.nopainnoscan.databinding.ActivityScannerBinding
-import com.maitre.nopainnoscan.databinding.ItemAlternativeBinding
+import com.maitre.nopainnoscan.ocr.NutritionParse
+import com.maitre.nopainnoscan.ocr.NutritionParser
+import com.maitre.nopainnoscan.ocr.OcrLine
+import com.maitre.nopainnoscan.ui.ResultRenderer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import kotlin.math.abs
-import kotlin.math.roundToInt
 
 /**
  * Scan live sans photo : CameraX pousse chaque frame à ML Kit sur un thread dédié.
- * Un seul BarcodeScanner pour toute l'activité (en créer un par frame fuit des ressources natives).
+ * Deux modes : code-barres (par défaut) ou OCR du tableau nutritionnel. Un seul client
+ * ML Kit par mode pour toute l'activité (en créer un par frame fuit des ressources natives).
  */
 class ScannerActivity : AppCompatActivity() {
 
+    private enum class Mode { BARCODE, OCR }
+
     private lateinit var binding: ActivityScannerBinding
     private lateinit var prefs: AppPrefs
+    private lateinit var renderer: ResultRenderer
     private lateinit var cameraExecutor: ExecutorService
 
-    private val scanner = BarcodeScanning.getClient(
+    private val barcodeScanner = BarcodeScanning.getClient(
         BarcodeScannerOptions.Builder()
             .setBarcodeFormats(Barcode.FORMAT_EAN_13, Barcode.FORMAT_EAN_8)
             .build()
     )
+    private val textRecognizerLazy = lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+    private val textRecognizer by textRecognizerLazy
 
     // Accédés depuis le thread caméra et le thread UI.
+    @Volatile private var mode = Mode.BARCODE
     @Volatile private var lastScanned: String? = null
     @Volatile private var isBusy = false
     private var candidate: String? = null
     private var candidateHits = 0
+    private var lastParse: NutritionParse? = null
     private var goal: String? = null
 
     private val requestPermission =
@@ -82,6 +92,7 @@ class ScannerActivity : AppCompatActivity() {
         setContentView(binding.root)
         prefs = AppPrefs(this)
         cameraExecutor = Executors.newSingleThreadExecutor()
+        renderer = ResultRenderer(this, binding.result, layoutInflater) { ProductActivity.open(this, it) }
 
         // Caméra sous la barre d'état : on décale les puces et la feuille des insets système.
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -95,6 +106,7 @@ class ScannerActivity : AppCompatActivity() {
         }
 
         setupStoreChips()
+        setupModes()
         lifecycleScope.launch {
             goal = runCatching { ApiClient.get(this@ScannerActivity).getProfile().goal }.getOrNull()
         }
@@ -121,6 +133,31 @@ class ScannerActivity : AppCompatActivity() {
             val chip = ids.firstOrNull()?.let { g.findViewById<Chip>(it) } ?: return@setOnCheckedStateChangeListener
             prefs.store = options[chip.tag as Int]
         }
+    }
+
+    private fun setupModes() {
+        binding.modeGroup.addOnButtonCheckedListener { _, id, checked ->
+            if (!checked) return@addOnButtonCheckedListener
+            mode = if (id == R.id.btnModeOcr) Mode.OCR else Mode.BARCODE
+            resetSheet()
+        }
+        binding.ocrForm.btnRetry.setOnClickListener { resetSheet() }
+        binding.ocrForm.btnSubmit.setOnClickListener { submitOcr() }
+        binding.btnOcrAgain.setOnClickListener { resetSheet() }
+    }
+
+    /** Retour à l'état d'attente du mode courant ; relance l'analyse. */
+    private fun resetSheet() {
+        binding.result.root.visibility = View.GONE
+        binding.ocrForm.root.visibility = View.GONE
+        binding.btnOcrAgain.visibility = View.GONE
+        binding.tvWaiting.visibility = View.VISIBLE
+        binding.tvWaiting.text = getString(if (mode == Mode.OCR) R.string.ocr_waiting else R.string.scanner_waiting)
+        binding.tvHint.text = getString(if (mode == Mode.OCR) R.string.ocr_hint else R.string.scanner_hint)
+        lastParse = null
+        candidate = null
+        lastScanned = null
+        isBusy = false
     }
 
     private fun startCamera() {
@@ -156,10 +193,17 @@ class ScannerActivity : AppCompatActivity() {
             return
         }
         val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-        scanner.process(image)
-            .addOnSuccessListener { barcodes -> onBarcode(barcodes.firstOrNull()?.rawValue) }
-            .addOnCompleteListener { imageProxy.close() }
+        when (mode) {
+            Mode.BARCODE -> barcodeScanner.process(image)
+                .addOnSuccessListener { barcodes -> onBarcode(barcodes.firstOrNull()?.rawValue) }
+                .addOnCompleteListener { imageProxy.close() }
+            Mode.OCR -> textRecognizer.process(image)
+                .addOnSuccessListener(::onText)
+                .addOnCompleteListener { imageProxy.close() }
+        }
     }
+
+    // ---------- code-barres ----------
 
     /** Exige le même code sur 2 frames consécutives : évite les lectures parasites. */
     private fun onBarcode(code: String?) {
@@ -191,65 +235,89 @@ class ScannerActivity : AppCompatActivity() {
         }
     }
 
-    private fun showScore(score: ScoreDto) {
-        val category = Category.of(score.category)
-        binding.tvWaiting.visibility = View.GONE
-        binding.resultGroup.visibility = View.VISIBLE
+    // ---------- tableau nutritionnel ----------
 
-        binding.ring.set(score.score, ContextCompat.getColor(this, category.color))
-        binding.chipCategory.showPill(getString(category.label), category)
-        binding.tvProduct.text = score.product_name
-        val goalText = getString(goalLabelLower(goal))
-        val store = Store.fromSlug(score.store)
-        binding.tvMeta.text = if (store != null) getString(R.string.scanner_for_goal_store, goalText, store.label)
-        else getString(R.string.scanner_for_goal, goalText)
-
-        renderBreakdown(score.breakdown)
-        renderAlternatives(score)
-    }
-
-    private fun renderBreakdown(breakdown: Map<String, Double>) {
-        val group = binding.breakdownChips
-        group.removeAllViews()
-        val bonus = ContextCompat.getColor(this, R.color.cat_parfait_on)
-        val malus = ContextCompat.getColor(this, R.color.cat_a_eviter_on)
-        breakdown.filterValues { abs(it) >= 0.05 }.forEach { (key, value) ->
-            val label = BREAKDOWN_LABELS[key] ?: return@forEach
-            val amount = if (value > 0) "+${fmt(value)}" else "−${fmt(-value)}"
-            val text = SpannableStringBuilder(getString(label)).append("  ").apply {
-                val start = length
-                append(amount)
-                setSpan(ForegroundColorSpan(if (value > 0) bonus else malus), start, length, 0)
-                setSpan(StyleSpan(Typeface.BOLD), start, length, 0)
+    /** Deux lectures stables d'affilée avant de proposer le formulaire de vérification. */
+    private fun onText(text: Text) {
+        if (mode != Mode.OCR || isBusy) return
+        val lines = text.textBlocks.flatMap { block ->
+            block.lines.mapNotNull { line ->
+                line.boundingBox?.let { OcrLine(line.text, it.left, it.top, it.right, it.bottom) }
             }
-            val chip = layoutInflater.inflate(R.layout.view_chip_breakdown, group, false) as Chip
-            chip.text = text
-            group.addView(chip)
+        }
+        val parse = NutritionParser.parse(lines)
+        if (!parse.isUsable) return
+        val previous = lastParse
+        lastParse = parse
+        if (previous == null || !previous.matches(parse)) return
+
+        isBusy = true
+        showOcrForm(parse)
+    }
+
+    private fun showOcrForm(parse: NutritionParse) {
+        binding.tvWaiting.visibility = View.GONE
+        binding.result.root.visibility = View.GONE
+        with(binding.ocrForm) {
+            root.visibility = View.VISIBLE
+            fieldName.setText(getString(R.string.ocr_name_default))
+            fieldKcal.setText(Fmt.field(parse.kcal))
+            fieldProtein.setText(Fmt.field(parse.protein))
+            fieldCarbs.setText(Fmt.field(parse.carbs))
+            fieldSugars.setText(Fmt.field(parse.sugars))
+            fieldFat.setText(Fmt.field(parse.fat))
+            fieldSatFat.setText(Fmt.field(parse.satFat))
+            fieldFiber.setText(Fmt.field(parse.fiber))
+            fieldSalt.setText(Fmt.field(parse.salt))
         }
     }
 
-    private fun renderAlternatives(score: ScoreDto) {
-        val container = binding.altContainer
-        container.removeAllViews()
-        val alternatives = score.alternatives.orEmpty()
-        binding.tvAltTitle.visibility = if (alternatives.isEmpty()) View.GONE else View.VISIBLE
-        if (alternatives.isEmpty()) return
-
-        val store = Store.fromSlug(score.store)
-        binding.tvAltTitle.text = if (store != null) getString(R.string.scanner_alternatives_store, store.label)
-        else getString(R.string.scanner_alternatives_any)
-
-        alternatives.forEach { alt ->
-            val row = ItemAlternativeBinding.inflate(layoutInflater, container, false)
-            row.tvName.text = alt.name
-            row.tvScore.showScorePill(alt.score, Category.of(alt.category))
-            container.addView(row.root)
+    private fun submitOcr() {
+        val form = binding.ocrForm
+        val kcal = form.fieldKcal.num()
+        if (kcal == null) {
+            Toast.makeText(this, R.string.ocr_missing_kcal, Toast.LENGTH_SHORT).show()
+            return
         }
+        val dto = NutrientsDto(
+            name = form.fieldName.text.toString().trim().ifBlank { getString(R.string.ocr_name_default) },
+            kcal_100g = kcal,
+            protein_100g = form.fieldProtein.num() ?: 0.0,
+            carbs_100g = form.fieldCarbs.num() ?: 0.0,
+            sugars_100g = form.fieldSugars.num() ?: 0.0,
+            fat_100g = form.fieldFat.num() ?: 0.0,
+            saturated_fat_100g = form.fieldSatFat.num() ?: 0.0,
+            fiber_100g = form.fieldFiber.num() ?: 0.0,
+            salt_100g = form.fieldSalt.num() ?: 0.0,
+        )
+        form.btnSubmit.isEnabled = false
+        lifecycleScope.launch {
+            runCatching { ApiClient.get(this@ScannerActivity).scanManual(dto, prefs.store?.slug) }
+                .onSuccess {
+                    form.root.visibility = View.GONE
+                    showScore(it)
+                }
+                .onFailure(::showFailure)
+            form.btnSubmit.isEnabled = true
+            // Le résultat reste affiché ; l'utilisateur repasse par « Rescanner » ou change de mode.
+        }
+    }
+
+    private fun EditText.num(): Double? = Fmt.parse(text)
+
+    // ---------- résultat ----------
+
+    private fun showScore(score: ScoreDto) {
+        binding.tvWaiting.visibility = View.GONE
+        binding.result.root.visibility = View.VISIBLE
+        renderer.render(score, goal)
+        // En OCR l'analyse reste en pause (isBusy) jusqu'à « Rescanner » : la carte reste lisible.
+        binding.btnOcrAgain.visibility = if (mode == Mode.OCR) View.VISIBLE else View.GONE
     }
 
     private fun showFailure(e: Throwable) {
         binding.tvWaiting.visibility = View.VISIBLE
-        binding.resultGroup.visibility = View.GONE
+        binding.result.root.visibility = View.GONE
         binding.tvWaiting.text = when ((e as? HttpException)?.code()) {
             404 -> getString(R.string.scanner_not_found)
             401 -> getString(R.string.scanner_unauthorized)
@@ -257,24 +325,15 @@ class ScannerActivity : AppCompatActivity() {
         }
     }
 
-    private fun fmt(v: Double): String =
-        if (v % 1.0 == 0.0 || v >= 10) v.roundToInt().toString() else Fmt.dec1(v)
-
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
-        scanner.close()
+        barcodeScanner.close()
+        if (textRecognizerLazy.isInitialized()) textRecognizer.close()
     }
 
     private companion object {
         const val RESCAN_DELAY_MS = 3000L
         const val CONFIRM_FRAMES = 2
-        val BREAKDOWN_LABELS = mapOf(
-            "bonus_proteines" to R.string.breakdown_bonus_proteines,
-            "bonus_fibres" to R.string.breakdown_bonus_fibres,
-            "malus_sucre" to R.string.breakdown_malus_sucre,
-            "malus_gras_satures" to R.string.breakdown_malus_gras_satures,
-            "malus_densite_calorique" to R.string.breakdown_malus_densite_calorique,
-        )
     }
 }

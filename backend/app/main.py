@@ -3,7 +3,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from . import body, models, schemas, scoring, services
 from .auth import current_user
+from .categories import CATEGORY_LABELS
 from .database import engine, get_db
+from .stores import STORE_LABELS
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -18,12 +20,14 @@ def _goal(user: models.User) -> str:
 
 
 def _score_response(
-    db: Session, user: models.User, product: models.Product, store: str | None
+    db: Session, user: models.User, product: models.Product, store: str | None, record: bool
 ) -> schemas.ScoreOut:
     goal = _goal(user)
     result = scoring.compute_score(product, goal)
-    services.record_scan(db, user, product, store, result)
-    alternatives = services.find_alternatives(db, product, goal, store, result["score"])
+    if record:
+        services.record_scan(db, user, product, store, result)
+    services.seed_alternatives(db, product.category, store)
+    alternatives, scope = services.find_alternatives(db, product, goal, store, result["score"])
     db.commit()
     return schemas.ScoreOut(
         product_id=product.id,
@@ -31,6 +35,7 @@ def _score_response(
         source=product.source,
         store=store,
         alternatives=alternatives,
+        alternatives_scope=scope,
         **result,
     )
 
@@ -47,7 +52,28 @@ def me(user: models.User = Depends(current_user)):
 
 @app.get("/stores", response_model=list[schemas.StoreOut])
 def stores():
-    return [{"slug": slug, "label": label} for slug, label in schemas.STORE_LABELS.items()]
+    return [{"slug": slug, "label": label} for slug, label in STORE_LABELS.items()]
+
+
+@app.get("/categories", response_model=list[schemas.CategoryOut])
+def categories():
+    return [{"slug": slug, "label": label} for slug, label in CATEGORY_LABELS.items()]
+
+
+@app.get("/recommendations", response_model=schemas.RecommendationsOut)
+def recommendations(
+    category: str = Query(min_length=1, max_length=128),
+    store: schemas.Store | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=50),
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """Les meilleurs produits d'une famille pour ce profil, dans l'enseigne si possible."""
+    if category not in CATEGORY_LABELS:
+        raise HTTPException(422, "Famille inconnue : voir GET /categories.")
+    items, scope = services.recommend(db, category, _goal(user), store, limit)
+    db.commit()
+    return schemas.RecommendationsOut(category=category, store=store, scope=scope, items=items)
 
 
 # ---------- Profil (propre à chaque utilisateur) ----------
@@ -109,7 +135,7 @@ def scan_barcode(
     product = services.get_or_fetch_product(db, barcode)
     if not product:
         raise HTTPException(404, "Produit introuvable (cache local + Open Food Facts).")
-    return _score_response(db, user, product, store)
+    return _score_response(db, user, product, store, record=True)
 
 
 @app.post("/scan/manual", response_model=schemas.ScoreOut)
@@ -121,7 +147,21 @@ def scan_manual(
 ):
     """Tableau nutritionnel lu directement (OCR ou saisie) : le produit rejoint le cache partagé."""
     product = services.create_manual_product(db, nutrients)
-    return _score_response(db, user, product, store)
+    return _score_response(db, user, product, store, record=True)
+
+
+@app.get("/products/{product_id}", response_model=schemas.ScoreOut)
+def product_detail(
+    product_id: int,
+    store: schemas.Store | None = Query(default=None),
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """Fiche d'un produit connu (historique) : score actuel + alternatives, sans scan."""
+    product = db.get(models.Product, product_id)
+    if not product:
+        raise HTTPException(404, "Produit inconnu.")
+    return _score_response(db, user, product, store, record=False)
 
 
 @app.get("/scans", response_model=list[schemas.ScanOut])

@@ -5,15 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 Goal = Literal["cut", "maintenance", "bulk"]
 Category = Literal["parfait", "pas_mal", "a_eviter", "a_ne_pas_manger"]
-Store = Literal["leclerc", "lidl", "grand_frais", "auchan", "carrefour"]
-
-STORE_LABELS: dict[str, str] = {
-    "leclerc": "E.Leclerc",
-    "lidl": "Lidl",
-    "grand_frais": "Grand Frais",
-    "auchan": "Auchan",
-    "carrefour": "Carrefour",
-}
+Store = Literal["leclerc", "lidl", "grand_frais", "auchan", "carrefour", "thiriet"]
 
 
 class UserOut(BaseModel):
@@ -106,6 +98,8 @@ class ScoreOut(BaseModel):
     source: str
     store: Store | None = None
     alternatives: list[AlternativeOut] = []
+    # "store" : vues dans l'enseigne demandée ; "any" : repli sur toutes les enseignes.
+    alternatives_scope: Literal["store", "any"] = "any"
 
 
 class ScanOut(BaseModel):
@@ -118,3 +112,25 @@ class ScanOut(BaseModel):
     score: float
     category: Category
     created_at: datetime
+
+
+class CategoryOut(BaseModel):
+    slug: str  # valeur `pnns_groups_2` d'Open Food Facts
+    label: str
+
+
+class RecommendationOut(BaseModel):
+    product_id: int
+    name: str
+    score: float
+    category: Category
+    kcal_100g: float
+    protein_100g: float
+
+
+class RecommendationsOut(BaseModel):
+    category: str
+    store: Store | None
+    # "store" : produits vus dans l'enseigne ; "any" : repli sur toutes les enseignes.
+    scope: Literal["store", "any"]
+    items: list[RecommendationOut]

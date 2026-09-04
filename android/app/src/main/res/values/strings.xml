@@ -115,4 +115,50 @@
     <string name="settings_invalid_url">URL invalide : http(s):// … et un / final.</string>
 
     <string name="error_generic">Erreur : %1$s</string>
+
+    <!-- Fiche produit -->
+    <string name="product_title">Fiche produit</string>
+    <string name="product_context_store">Alternatives pour %1$s</string>
+    <string name="product_context_any">Alternatives toutes enseignes</string>
+    <string name="product_load_error">Impossible de charger ce produit.</string>
+    <string name="scanner_alternatives_empty_store">Aucune alternative connue chez %1$s pour l\'instant. Scanne d\'autres produits de la même famille pour l\'enrichir.</string>
+    <string name="scanner_alternatives_empty_any">Aucune alternative connue pour l\'instant.</string>
+    <string name="scanner_alternatives_none_category">Pas d\'alternatives : famille de produit inconnue.</string>
+
+    <!-- OCR -->
+    <string name="mode_barcode">Code-barres</string>
+    <string name="mode_ocr">Tableau nutritionnel</string>
+    <string name="ocr_hint">Cadre le tableau des valeurs nutritionnelles</string>
+    <string name="ocr_waiting">Tiens le téléphone stable, la colonne « pour 100 g » bien visible. Les valeurs se remplissent toutes seules.</string>
+    <string name="ocr_review_title">Vérifie les valeurs lues</string>
+    <string name="ocr_review_sub">Pour 100 g. Corrige ce qui a mal été lu, puis note le produit.</string>
+    <string name="ocr_name">Nom du produit</string>
+    <string name="ocr_name_default">Produit sans code-barres</string>
+    <string name="ocr_kcal">kcal</string>
+    <string name="ocr_protein">Protéines</string>
+    <string name="ocr_carbs">Glucides</string>
+    <string name="ocr_sugars">Sucres</string>
+    <string name="ocr_fat">Lipides</string>
+    <string name="ocr_satfat">Saturés</string>
+    <string name="ocr_fiber">Fibres</string>
+    <string name="ocr_salt">Sel</string>
+    <string name="ocr_submit">Noter ce produit</string>
+    <string name="ocr_retry">Rescanner</string>
+    <string name="ocr_missing_kcal">Il faut au moins les kcal pour noter.</string>
+
+    <!-- Recommandations -->
+    <string name="main_reco_title">Trouver un bon produit</string>
+    <string name="main_reco_sub">Choisis une famille, on te donne les meilleurs pour ton objectif.</string>
+    <string name="reco_title">Recommandations</string>
+    <string name="reco_sub">Les meilleurs produits d\'une famille pour ton objectif, dans l\'enseigne de ton choix.</string>
+    <string name="reco_category">Famille de produit</string>
+    <string name="reco_store_any">Toutes enseignes</string>
+    <string name="reco_scope_store">Vus chez %1$s</string>
+    <string name="reco_scope_any">Toutes enseignes</string>
+    <string name="reco_scope_fallback">Rien de connu chez %1$s pour cette famille : voici toutes enseignes.</string>
+    <string name="reco_empty">Aucun produit connu pour cette famille. Scanne-en quelques-uns ou réessaie plus tard.</string>
+    <string name="reco_loading">Recherche…</string>
+    <string name="reco_error">Serveur injoignable.</string>
+    <string name="reco_meta">%1$s kcal · %2$s g prot. / 100 g</string>
+    <string name="reco_pick">Choisis une famille pour commencer.</string>
 </resources>

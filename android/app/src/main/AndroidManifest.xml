@@ -30,6 +30,8 @@
             android:name=".ProfileActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ProductActivity" android:exported="false" />
+        <activity android:name=".RecommendationsActivity" android:exported="false" />
         <activity
             android:name=".SettingsActivity"
             android:exported="false"

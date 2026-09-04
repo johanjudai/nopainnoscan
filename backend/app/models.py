@@ -78,6 +78,16 @@ class ProductStore(Base):
     last_seen_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class AlternativeSeed(Base):
+    """Mémo des imports OFF par (famille, enseigne) pour ne pas re-chercher à chaque scan."""
+
+    __tablename__ = "alternative_seeds"
+
+    category = Column(String(128), primary_key=True)
+    store = Column(String(32), primary_key=True, default="")  # "" = toutes enseignes
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class Scan(Base):
     """Historique par utilisateur, score figé au moment du scan."""
 
