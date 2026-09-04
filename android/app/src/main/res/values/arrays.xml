@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Même ordre que activity_values : miroir de schemas.Activity côté backend. -->
+    <string-array name="activity_labels">
+        <item>Sédentaire · bureau, peu de marche</item>
+        <item>Léger · 1 à 3 séances / semaine</item>
+        <item>Sportif · 4 à 5 séances / semaine</item>
+        <item>Très actif · 6 à 7 séances / semaine</item>
+        <item>Athlète · 2 entraînements par jour</item>
+    </string-array>
+    <string-array name="activity_values">
+        <item>sedentary</item>
+        <item>light</item>
+        <item>moderate</item>
+        <item>active</item>
+        <item>athlete</item>
+    </string-array>
+</resources>

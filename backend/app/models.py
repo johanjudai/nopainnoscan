@@ -18,7 +18,7 @@ class User(Base):
 
 
 class Profile(Base):
-    """Paramètres corporels et objectif, propres à chaque utilisateur."""
+    """Mesures et objectif par utilisateur ; masse grasse et cibles sont dérivées (body.py)."""
 
     __tablename__ = "profiles"
 
@@ -26,11 +26,17 @@ class Profile(Base):
     user_id = Column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
     )
-    weight_kg = Column(Float, nullable=False)
+    sex = Column(String(8), nullable=False, default="male")  # male | female
+    age = Column(Integer, nullable=False)
     height_cm = Column(Float, nullable=False)
-    current_body_fat_pct = Column(Float, nullable=True)
-    target_body_fat_pct = Column(Float, nullable=True)
+    weight_kg = Column(Float, nullable=False)
+    neck_cm = Column(Float, nullable=True)
+    waist_cm = Column(Float, nullable=True)
+    hips_cm = Column(Float, nullable=True)
+    activity = Column(String(16), nullable=False, default="moderate")
     goal = Column(String(16), nullable=False, default="maintenance")  # cut | maintenance | bulk
+    target_body_fat_pct = Column(Float, nullable=True)
+    # Surcharges manuelles ; None = cible calculée.
     daily_kcal_target = Column(Float, nullable=True)
     daily_protein_target_g = Column(Float, nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

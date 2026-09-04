@@ -14,17 +14,53 @@ import retrofit2.http.Query
 import java.util.concurrent.TimeUnit
 
 // Miroir des schémas Pydantic du backend : noms snake_case conservés pour Gson.
+// Gson ignore les valeurs par défaut Kotlin : tout champ absent de la réponse arrive null.
 
 data class UserDto(val id: Int, val name: String)
 
 data class ProfileDto(
-    val weight_kg: Double,
+    val sex: String, // male | female
+    val age: Int,
     val height_cm: Double,
-    val current_body_fat_pct: Double?,
-    val target_body_fat_pct: Double?,
+    val weight_kg: Double,
+    val neck_cm: Double?,
+    val waist_cm: Double?,
+    val hips_cm: Double?,
+    val activity: String, // sedentary | light | moderate | active | athlete
     val goal: String, // cut | maintenance | bulk
+    val target_body_fat_pct: Double?,
+    val daily_kcal_target: Double?, // null = cible calculée
+    val daily_protein_target_g: Double?,
+)
+
+data class MessageDto(val level: String, val field: String, val text: String)
+
+data class EstimateDto(
+    val body_fat_pct: Double?,
+    val lean_mass_kg: Double?,
+    val bmr_kcal: Int,
+    val tdee_kcal: Int,
+    val kcal_target_auto: Int,
+    val protein_target_auto: Int,
+    val kcal_target: Int,
+    val protein_target_g: Int,
+    val messages: List<MessageDto>,
+)
+
+data class ProfileOutDto(
+    val sex: String,
+    val age: Int,
+    val height_cm: Double,
+    val weight_kg: Double,
+    val neck_cm: Double?,
+    val waist_cm: Double?,
+    val hips_cm: Double?,
+    val activity: String,
+    val goal: String,
+    val target_body_fat_pct: Double?,
     val daily_kcal_target: Double?,
     val daily_protein_target_g: Double?,
+    val estimate: EstimateDto,
 )
 
 data class NutrientsDto(
@@ -40,12 +76,7 @@ data class NutrientsDto(
     val salt_100g: Double = 0.0,
 )
 
-data class AlternativeDto(
-    val product_id: Int,
-    val name: String,
-    val score: Double,
-    val category: String,
-)
+data class AlternativeDto(val product_id: Int, val name: String, val score: Double, val category: String)
 
 data class ScoreDto(
     val product_id: Int,
@@ -55,7 +86,7 @@ data class ScoreDto(
     val breakdown: Map<String, Double>,
     val source: String,
     val store: String?,
-    val alternatives: List<AlternativeDto> = emptyList(),
+    val alternatives: List<AlternativeDto>,
 )
 
 data class ScanDto(
@@ -73,10 +104,13 @@ interface NoPainNoScanApi {
     suspend fun me(): UserDto
 
     @GET("profile")
-    suspend fun getProfile(): ProfileDto
+    suspend fun getProfile(): ProfileOutDto
 
     @PUT("profile")
-    suspend fun setProfile(@Body profile: ProfileDto): ProfileDto
+    suspend fun setProfile(@Body profile: ProfileDto): ProfileOutDto
+
+    @POST("profile/estimate")
+    suspend fun estimate(@Body profile: ProfileDto): EstimateDto
 
     @GET("scan/barcode/{barcode}")
     suspend fun scanBarcode(@Path("barcode") barcode: String, @Query("store") store: String?): ScoreDto
@@ -97,7 +131,7 @@ object ApiClient {
 
     fun get(context: Context): NoPainNoScanApi {
         val prefs = AppPrefs(context)
-        val signature = prefs.apiBaseUrl + "" + prefs.apiKey
+        val signature = prefs.apiBaseUrl + " " + prefs.apiKey
         cached?.takeIf { it.first == signature }?.let { return it.second }
         return synchronized(this) {
             cached?.takeIf { it.first == signature }?.second

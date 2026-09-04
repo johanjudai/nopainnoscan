@@ -59,9 +59,9 @@ Créer un utilisateur par personne. La clé n'est affichée **qu'une fois** (seu
 son hash SHA-256 est stocké), à coller dans l'app (Réglages) :
 
 ```bash
-docker compose exec nopainnoscan-api python -m app.cli create-user pierre
-docker compose exec nopainnoscan-api python -m app.cli create-user copine
-docker compose exec nopainnoscan-api python -m app.cli rotate-key pierre   # révoque l'ancienne
+docker compose exec nopainnoscan-api python -m app.cli create-user user1
+docker compose exec nopainnoscan-api python -m app.cli create-user user2
+docker compose exec nopainnoscan-api python -m app.cli rotate-key user1   # révoque l'ancienne
 ```
 
 L'API écoute sur `API_PORT` (8088). Mets-la derrière ton reverse proxy habituel,
@@ -76,7 +76,8 @@ Toutes les routes sauf `/health` exigent le header `X-Api-Key`.
 | GET     | `/health`                          | Liveness (public)                                                 |
 | GET     | `/me`                              | Utilisateur associé à la clé                                      |
 | GET     | `/stores`                          | Enseignes connues (`leclerc`, `lidl`, `grand_frais`, `auchan`, `carrefour`) |
-| GET     | `/profile` · PUT `/profile`        | Profil de l'utilisateur courant                                   |
+| GET     | `/profile` · PUT `/profile`        | Profil de l'utilisateur courant, avec `estimate` (dérivés)        |
+| POST    | `/profile/estimate`                | Aperçu des dérivés pour un profil non enregistré (saisie live)    |
 | GET     | `/scan/barcode/{code}?store=`      | Cache → Open Food Facts → score + alternatives, historise le scan |
 | POST    | `/scan/manual?store=`              | Score depuis des valeurs / 100 g (OCR ou saisie)                  |
 | GET     | `/scans?limit=`                    | Historique de l'utilisateur                                       |
@@ -85,6 +86,20 @@ Un scan avec `store=` marque le produit comme « vu dans cette enseigne » : c'e
 ce qui alimente les alternatives. Une alternative = même famille Open Food Facts
 (`pnns_groups_2`), mieux notée **pour ton profil**, vue dans l'enseigne indiquée
 (ou n'importe où si aucune enseigne).
+
+### Profil : on saisit des mesures, le serveur déduit le reste
+
+Le profil ne contient que des choses mesurables : sexe, âge, taille, poids,
+tour de cou, tour de taille (et hanches pour les femmes), niveau d'activité,
+objectif (`cut` / `maintenance` / `bulk`) et % de masse grasse visé. Tout le
+reste est calculé dans `backend/app/body.py` et renvoyé dans `estimate` :
+
+- masse grasse (méthode US Navy, à partir des tours de cou / taille / hanches) et masse maigre ;
+- métabolisme de base (Mifflin-St Jeor) et dépense journalière (facteur d'activité) ;
+- cibles kcal (dépense × 0,80 en sèche, × 1,10 en prise) et protéines (2,2 / 1,8 / 2,0 g par kg) ;
+- si l'utilisateur force une cible à la main (`daily_kcal_target`, `daily_protein_target_g`),
+  des `messages` de niveau `info` ou `warning` (sous le métabolisme de base, déficit
+  trop agressif, protéines insuffisantes, etc.).
 
 Doc interactive : `http://<serveur>:8088/docs`.
 
@@ -118,10 +133,19 @@ puis **Mon profil**. La valeur par défaut de l'URL vient de
 `android/gradle.properties` (`API_BASE_URL`, surchargeable avec
 `-PAPI_BASE_URL=…`).
 
-Écran scan : barre d'enseignes en haut (mémorisée), aperçu caméra, note en bas,
-et alternatives mieux notées dans l'enseigne s'il y en a. Le scan est **live** :
-CameraX pousse chaque frame (720p) à ML Kit on-device, un code doit être lu sur
-2 frames consécutives avant d'interroger l'API.
+Interface Material 3, direction « soft clinique » (blanc chaud, cartes arrondies,
+accent corail, police Sora pour les titres et les chiffres). Les maquettes sont
+dans le canvas Claude Design lié au projet.
+
+- **Accueil** : état de connexion, carte de scan, tuiles masse grasse et cibles du jour, derniers scans.
+- **Scanner** : barre d'enseignes en haut (mémorisée), aperçu caméra, feuille de résultat
+  avec anneau de score, catégorie, détail bonus / malus et alternatives mieux notées dans l'enseigne.
+  Le scan est **live** : CameraX pousse chaque frame (720p) à ML Kit on-device, un code doit
+  être lu sur 2 frames consécutives avant d'interroger l'API.
+- **Profil** : sexe et objectif en contrôles segmentés, activité en menu, mensurations ;
+  la masse grasse et les cibles s'affichent au fil de la saisie via `POST /profile/estimate`
+  (débounce 350 ms), avec un message d'info ou d'alerte si une cible est modifiée à la main.
+- **Réglages** : URL de l'API, clé, test de connexion.
 
 Sécurité côté app : clé API en stockage privé (`allowBackup=false`), un seul
 client HTTP partagé avec timeouts courts. L'API est appelée en `http://` sur le
@@ -145,7 +169,6 @@ passes en TLS via ton reverse proxy.
 - [ ] OCR live (ML Kit Text Recognition) en fallback quand aucun code-barres n'est
       détecté : parsing du tableau nutritionnel → `POST /scan/manual`.
 - [ ] Écran historique (`GET /scans`).
-- [ ] Affichage du `breakdown` (bonus / malus) sous la note.
 - [ ] Migrations (Alembic) dès que le schéma bouge.
 - [ ] Import complet Open Food Facts pour du 100 % offline dès le premier scan.
 

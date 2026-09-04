@@ -28,14 +28,43 @@ class StoreOut(BaseModel):
     label: str
 
 
+Sex = Literal["male", "female"]
+Activity = Literal["sedentary", "light", "moderate", "active", "athlete"]
+
+
 class ProfileIn(BaseModel):
-    weight_kg: float = Field(gt=0, lt=500)
-    height_cm: float = Field(gt=0, lt=300)
-    current_body_fat_pct: float | None = Field(default=None, ge=0, le=100)
-    target_body_fat_pct: float | None = Field(default=None, ge=0, le=100)
+    sex: Sex = "male"
+    age: int = Field(ge=14, le=100)
+    height_cm: float = Field(gt=100, lt=250)
+    weight_kg: float = Field(gt=30, lt=300)
+    neck_cm: float | None = Field(default=None, gt=20, lt=70)
+    waist_cm: float | None = Field(default=None, gt=40, lt=200)
+    hips_cm: float | None = Field(default=None, gt=50, lt=200)
+    activity: Activity = "moderate"
     goal: Goal = "maintenance"
-    daily_kcal_target: float | None = Field(default=None, gt=0)
-    daily_protein_target_g: float | None = Field(default=None, ge=0)
+    target_body_fat_pct: float | None = Field(default=None, ge=3, le=50)
+    daily_kcal_target: float | None = Field(default=None, gt=0, lt=10000)
+    daily_protein_target_g: float | None = Field(default=None, ge=0, lt=1000)
+
+
+class Message(BaseModel):
+    level: Literal["info", "warning"]
+    field: Literal["kcal", "protein"]
+    text: str
+
+
+class Estimate(BaseModel):
+    """Valeurs dérivées du profil : jamais saisies, toujours recalculées."""
+
+    body_fat_pct: float | None
+    lean_mass_kg: float | None
+    bmr_kcal: int
+    tdee_kcal: int
+    kcal_target_auto: int
+    protein_target_auto: int
+    kcal_target: int
+    protein_target_g: int
+    messages: list[Message]
 
 
 class ProfileOut(ProfileIn):
@@ -43,6 +72,7 @@ class ProfileOut(ProfileIn):
 
     id: int
     user_id: int
+    estimate: Estimate
 
 
 class NutrientsIn(BaseModel):

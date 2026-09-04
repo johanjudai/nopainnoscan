@@ -1,7 +1,7 @@
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
-from . import models, schemas, scoring, services
+from . import body, models, schemas, scoring, services
 from .auth import current_user
 from .database import engine, get_db
 
@@ -53,11 +53,20 @@ def stores():
 # ---------- Profil (propre à chaque utilisateur) ----------
 
 
+def _profile_out(profile: models.Profile) -> schemas.ProfileOut:
+    return schemas.ProfileOut.model_validate(
+        {
+            **{c.key: getattr(profile, c.key) for c in models.Profile.__table__.columns},
+            "estimate": body.estimate(profile),
+        }
+    )
+
+
 @app.get("/profile", response_model=schemas.ProfileOut)
 def get_profile(user: models.User = Depends(current_user)):
     if not user.profile:
         raise HTTPException(404, "Aucun profil configuré. PUT /profile pour en créer un.")
-    return user.profile
+    return _profile_out(user.profile)
 
 
 @app.put("/profile", response_model=schemas.ProfileOut)
@@ -75,7 +84,13 @@ def upsert_profile(
         db.add(profile)
     db.commit()
     db.refresh(profile)
-    return profile
+    return _profile_out(profile)
+
+
+@app.post("/profile/estimate", response_model=schemas.Estimate)
+def estimate_profile(data: schemas.ProfileIn, user: models.User = Depends(current_user)):
+    """Aperçu en direct pendant la saisie : rien n'est enregistré."""
+    return body.estimate(data)
 
 
 # ---------- Scan ----------
