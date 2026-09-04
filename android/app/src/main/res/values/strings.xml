@@ -2,47 +2,117 @@
 <resources>
     <string name="app_name">NoPainNoScan</string>
 
-    <string name="main_scan">Scanner un produit</string>
-    <string name="main_profile">Mon profil / objectifs</string>
-    <string name="main_settings">Réglages (serveur, clé)</string>
-    <string name="main_connected_as">Connecté : %1$s</string>
-    <string name="main_not_configured">Serveur non configuré ou clé invalide</string>
+    <!-- Accueil -->
+    <string name="main_greeting">Bonjour, %1$s</string>
+    <string name="main_greeting_anonymous">Bonjour</string>
+    <string name="main_date_goal">%1$s · %2$s</string>
+    <string name="main_connected">Connecté</string>
+    <string name="main_disconnected">Hors ligne</string>
+    <string name="main_settings">Réglages</string>
+    <string name="main_scan_title">Scanner un produit</string>
+    <string name="main_scan_sub">Vise le code-barres, la note arrive sans prendre de photo.</string>
+    <string name="main_open_camera">Ouvrir la caméra</string>
+    <string name="main_tile_bf">%1$s %% MG</string>
+    <string name="main_tile_bf_sub">Profil · objectif %1$s %%</string>
+    <string name="main_tile_bf_missing">Profil</string>
+    <string name="main_tile_bf_missing_sub">Renseigne tes mensurations</string>
+    <string name="main_tile_kcal">%1$s kcal</string>
+    <string name="main_tile_kcal_sub">Cible du jour · %1$s g prot.</string>
+    <string name="main_tile_kcal_missing">Cibles</string>
+    <string name="main_tile_kcal_missing_sub">Complète ton profil</string>
+    <string name="main_recent">Derniers scans</string>
+    <string name="main_recent_empty">Aucun scan pour l\'instant. Ouvre la caméra pour commencer.</string>
+    <string name="main_scan_meta">%1$s · %2$s</string>
 
-    <string name="scanner_hint">Pointe la caméra vers un code-barres…</string>
-    <string name="scanner_loading">Scan en cours (%1$s)…</string>
-    <string name="scanner_result">%1$s\n%2$s — %3$s/100</string>
-    <string name="scanner_alternatives_title">Mieux dans cette enseigne :</string>
-    <string name="scanner_alternatives_title_any">Mieux, vu ailleurs :</string>
-    <string name="scanner_alternative_line">• %1$s — %2$s/100</string>
-    <string name="scanner_not_found">Produit introuvable (cache local + Open Food Facts).\nTu pourras le rentrer via l\'OCR.</string>
+    <!-- Scanner -->
+    <string name="scanner_hint">Vise le code-barres</string>
+    <string name="scanner_waiting">Pointe la caméra vers un code-barres, la note s\'affiche ici.</string>
+    <string name="scanner_loading">Analyse de %1$s…</string>
+    <string name="scanner_for_goal">Pour ta %1$s</string>
+    <string name="scanner_for_goal_store">Pour ta %1$s · vu chez %2$s</string>
+    <string name="scanner_alternatives_store">Mieux chez %1$s</string>
+    <string name="scanner_alternatives_any">Mieux, vu ailleurs</string>
+    <string name="scanner_not_found">Produit introuvable dans le cache et sur Open Food Facts.</string>
     <string name="scanner_error">Serveur injoignable : %1$s</string>
+    <string name="scanner_unauthorized">Clé API refusée. Vérifie les réglages.</string>
     <string name="store_none">Hors magasin</string>
     <string name="camera_denied">Permission caméra refusée</string>
+    <string name="score_over_100">/100</string>
 
-    <string name="category_parfait">PARFAIT</string>
-    <string name="category_pas_mal">PAS MAL</string>
-    <string name="category_a_eviter">À ÉVITER</string>
-    <string name="category_a_ne_pas_manger">À NE PAS MANGER</string>
+    <string name="category_parfait">Parfait</string>
+    <string name="category_pas_mal">Pas mal</string>
+    <string name="category_a_eviter">À éviter</string>
+    <string name="category_a_ne_pas_manger">À ne pas manger</string>
 
-    <string name="profile_weight">Poids (kg)</string>
-    <string name="profile_height">Taille (cm)</string>
-    <string name="profile_current_bf">% masse grasse actuel</string>
-    <string name="profile_target_bf">% masse grasse visé</string>
-    <string name="profile_goal">Objectif (cut / maintenance / bulk)</string>
-    <string name="profile_kcal">Objectif kcal/jour</string>
-    <string name="profile_protein">Objectif protéines (g/jour)</string>
+    <string name="breakdown_bonus_proteines">Protéines</string>
+    <string name="breakdown_bonus_fibres">Fibres</string>
+    <string name="breakdown_malus_sucre">Sucre</string>
+    <string name="breakdown_malus_gras_satures">Gras sat.</string>
+    <string name="breakdown_malus_densite_calorique">Densité</string>
+
+    <string name="goal_cut">Sèche</string>
+    <string name="goal_maintenance">Maintien</string>
+    <string name="goal_bulk">Prise</string>
+    <string name="goal_cut_lower">sèche</string>
+    <string name="goal_maintenance_lower">maintenance</string>
+    <string name="goal_bulk_lower">prise de masse</string>
+
+    <!-- Profil -->
+    <string name="profile_title">Mon profil</string>
+    <string name="profile_sub">Tes mesures pilotent la note de chaque produit. Rien à calculer : on s\'en occupe.</string>
+    <string name="profile_section_you">Toi</string>
+    <string name="profile_male">Homme</string>
+    <string name="profile_female">Femme</string>
+    <string name="profile_age">Âge</string>
+    <string name="profile_height">Taille</string>
+    <string name="profile_weight">Poids</string>
+    <string name="profile_section_measures">Mensurations</string>
+    <string name="profile_measures_sub">Mètre ruban, sans serrer. Sert à estimer ta masse grasse.</string>
+    <string name="profile_neck">Cou</string>
+    <string name="profile_waist">Tour de taille</string>
+    <string name="profile_hips">Hanches</string>
+    <string name="profile_bf_label">Masse grasse estimée</string>
+    <string name="profile_bf_value">%1$s %%</string>
+    <string name="profile_bf_missing">—</string>
+    <string name="profile_bf_sub">Méthode US Navy · masse maigre %1$s kg</string>
+    <string name="profile_bf_sub_missing">Renseigne cou et tour de taille (et hanches) pour l\'estimer.</string>
+    <string name="profile_bf_target">Objectif</string>
+    <string name="profile_bf_hint_to_lose">Environ %1$s kg de gras à perdre pour atteindre %2$s %%.</string>
+    <string name="profile_bf_hint_reached">Objectif atteint. Garde le cap.</string>
+    <string name="profile_section_goal">Objectif</string>
+    <string name="profile_activity">Activité</string>
+    <string name="profile_section_targets">Cibles quotidiennes</string>
+    <string name="profile_targets_sub">Calculées pour toi. Modifie-les si tu sais ce que tu fais.</string>
+    <string name="profile_kcal">Calories</string>
+    <string name="profile_kcal_helper">Calculé : dépense %1$s kcal, ajustée à ton objectif</string>
+    <string name="profile_protein">Protéines</string>
+    <string name="profile_protein_helper">Calculé : %1$s g par kilo</string>
+    <string name="profile_reset_to">Remettre %1$s</string>
     <string name="profile_save">Enregistrer</string>
     <string name="profile_saved">Profil enregistré</string>
-    <string name="profile_invalid">Poids et taille sont obligatoires</string>
+    <string name="profile_invalid">Âge, taille et poids sont obligatoires</string>
+    <string name="unit_years">ans</string>
+    <string name="unit_cm">cm</string>
+    <string name="unit_kg">kg</string>
+    <string name="unit_kcal">kcal</string>
+    <string name="unit_g">g</string>
+    <string name="unit_pct">%</string>
 
-    <string name="settings_api_url">URL de l\'API (ex. http://192.168.1.10:8088/)</string>
-    <string name="settings_api_key">Clé API (X-Api-Key)</string>
+    <!-- Réglages -->
+    <string name="settings_title">Réglages</string>
+    <string name="settings_sub">Ton serveur, ta clé. Rien ne sort de ton réseau.</string>
+    <string name="settings_section_server">Serveur</string>
+    <string name="settings_api_url">Adresse de l\'API</string>
+    <string name="settings_api_url_helper">Commence par http:// ou https://, finit par /.</string>
+    <string name="settings_api_key">Clé API</string>
+    <string name="settings_api_key_helper">Donnée par la commande create-user sur le serveur. Stockée seulement sur ce téléphone.</string>
     <string name="settings_test">Tester la connexion</string>
     <string name="settings_save">Enregistrer</string>
     <string name="settings_saved">Réglages enregistrés</string>
-    <string name="settings_test_ok">OK, connecté en tant que %1$s</string>
-    <string name="settings_test_ko">Échec : %1$s</string>
-    <string name="settings_invalid_url">URL invalide (doit commencer par http:// ou https:// et finir par /)</string>
+    <string name="settings_test_ok">Connecté en tant que %1$s</string>
+    <string name="settings_test_ok_sub">Réponse en %1$d ms</string>
+    <string name="settings_test_ko">Connexion impossible</string>
+    <string name="settings_invalid_url">URL invalide : http(s):// … et un / final.</string>
 
     <string name="error_generic">Erreur : %1$s</string>
 </resources>

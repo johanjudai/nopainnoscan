@@ -32,18 +32,51 @@ def test_profile_is_per_user(client, headers, db):
     other = {"X-Api-Key": "test-key-copine"}
 
     assert client.get("/profile", headers=headers).status_code == 404
-    body = {"weight_kg": 80, "height_cm": 180, "goal": "cut"}
-    assert client.put("/profile", json=body, headers=headers).status_code == 200
-    body2 = {"weight_kg": 60, "height_cm": 165, "goal": "maintenance"}
+    body = {
+        "sex": "male",
+        "age": 30,
+        "weight_kg": 78,
+        "height_cm": 180,
+        "goal": "cut",
+        "neck_cm": 38,
+        "waist_cm": 82,
+        "activity": "moderate",
+    }
+    resp = client.put("/profile", json=body, headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["estimate"]["body_fat_pct"] == 13.7
+    assert resp.json()["estimate"]["kcal_target"] == 2180
+    body2 = {"sex": "female", "age": 28, "weight_kg": 60, "height_cm": 165, "goal": "maintenance"}
     assert client.put("/profile", json=body2, headers=other).status_code == 200
 
     assert client.get("/profile", headers=headers).json()["goal"] == "cut"
-    assert client.get("/profile", headers=other).json()["weight_kg"] == 60
+    mine = client.get("/profile", headers=other).json()
+    assert mine["weight_kg"] == 60
+    assert mine["estimate"]["body_fat_pct"] is None  # pas de mensurations
 
 
 def test_profile_rejects_absurd_values(client, headers):
-    resp = client.put("/profile", json={"weight_kg": -5, "height_cm": 180}, headers=headers)
+    resp = client.put(
+        "/profile",
+        json={"sex": "male", "age": 30, "weight_kg": -5, "height_cm": 180},
+        headers=headers,
+    )
     assert resp.status_code == 422
+
+
+def test_estimate_endpoint_does_not_save(client, headers):
+    body = {
+        "sex": "male",
+        "age": 30,
+        "weight_kg": 78,
+        "height_cm": 180,
+        "goal": "cut",
+        "daily_kcal_target": 1500,
+    }
+    resp = client.post("/profile/estimate", json=body, headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["messages"][0]["level"] == "warning"
+    assert client.get("/profile", headers=headers).status_code == 404
 
 
 def test_manual_scan_records_history_and_store(client, headers):
