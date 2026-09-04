@@ -33,6 +33,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # Le bit exécutable se perd facilement depuis un checkout Windows.
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
       - name: Resolve version
         id: version
         run: |
