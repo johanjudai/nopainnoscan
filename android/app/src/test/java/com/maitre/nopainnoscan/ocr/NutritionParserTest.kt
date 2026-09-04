@@ -81,6 +81,56 @@ class NutritionParserTest {
     }
 
     @Test
+    fun header_with_portion_before_100g_reads_the_second_column() {
+        val lines = row(0, "Valeurs moyennes", "Par portion (30 g)", "Pour 100 g") +
+            row(40, "Énergie", "138 kcal", "460 kcal") +
+            row(80, "Matières grasses", "5,7 g", "19 g") +
+            row(120, "Glucides", "19,5 g", "65 g") +
+            row(160, "Protéines", "1,8 g", "6 g")
+        val p = NutritionParser.parse(lines)
+        assertEquals(19.0, p.fat!!, 0.01)
+        assertEquals(65.0, p.carbs!!, 0.01)
+        assertEquals(6.0, p.protein!!, 0.01)
+    }
+
+    @Test
+    fun sodium_is_converted_to_salt_unless_salt_is_printed() {
+        val sodiumOnly = NutritionParser.parse(listOf(OcrLine("Sodium 0,4 g", 0, 0, 300, 20)))
+        assertEquals(1.0, sodiumOnly.salt!!, 0.01)
+        val both = NutritionParser.parse(
+            listOf(OcrLine("Sel 1,2 g", 0, 0, 300, 20), OcrLine("Sodium 0,48 g", 0, 30, 300, 50))
+        )
+        assertEquals(1.2, both.salt!!, 0.01)
+    }
+
+    @Test
+    fun lost_comma_and_letters_for_digits_are_repaired() {
+        val lines = listOf(
+            OcrLine("Énergie 25O kcal", 0, 0, 400, 20),
+            OcrLine("Matières grasses 9 5 g", 0, 30, 400, 50),
+            OcrLine("Glucides 3O g", 0, 60, 400, 80),
+            OcrLine("Protéines l1 g", 0, 90, 400, 110),
+        )
+        val p = NutritionParser.parse(lines)
+        assertEquals(250.0, p.kcal!!, 0.01)
+        assertEquals(9.5, p.fat!!, 0.01)
+        assertEquals(30.0, p.carbs!!, 0.01)
+        assertEquals(11.0, p.protein!!, 0.01)
+    }
+
+    @Test
+    fun parse_applies_coherence_and_reports_corrections() {
+        val lines = row(0, "Énergie", "110 kcal") +
+            row(40, "Matières grasses", "0,5 g") +
+            row(80, "Glucides", "24 g") +
+            row(120, "dont sucres", "85 g") + // virgule perdue : 8,5 g
+            row(160, "Protéines", "3 g")
+        val r = NutritionParser.parseDetailed(lines)
+        assertEquals(8.5, r.parse.sugars!!, 0.01)
+        assertEquals(listOf(Correction(NutrientField.SUGARS, 85.0, 8.5)), r.corrections)
+    }
+
+    @Test
     fun stability_compares_kcal_and_protein_within_5_percent() {
         val a = NutritionParse(kcal = 250.0, protein = 11.0, fat = 9.5, carbs = 30.0)
         val b = NutritionParse(kcal = 258.0, protein = 11.2, fat = 9.0, carbs = 31.0)

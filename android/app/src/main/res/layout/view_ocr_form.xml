@@ -6,17 +6,32 @@
     android:orientation="vertical">
 
     <TextView
+        android:id="@+id/tvFormTitle"
         style="@style/Text.Title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/ocr_review_title" />
 
     <TextView
+        android:id="@+id/tvFormSub"
         style="@style/Text.Muted"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
         android:text="@string/ocr_review_sub" />
+
+    <!-- Corrections automatiques (virgule perdue…) ou incohérences à corriger avant d'envoyer. -->
+    <TextView
+        android:id="@+id/tvCorrections"
+        style="@style/Text.Muted"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_message"
+        android:backgroundTint="@color/info_bg"
+        android:padding="10dp"
+        android:textColor="@color/info_fg"
+        android:visibility="gone" />
 
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"

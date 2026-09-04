@@ -1,6 +1,8 @@
 package com.maitre.nopainnoscan
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Size
@@ -22,6 +24,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
+import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -37,9 +40,13 @@ import com.maitre.nopainnoscan.api.ApiClient
 import com.maitre.nopainnoscan.api.NutrientsDto
 import com.maitre.nopainnoscan.api.ScoreDto
 import com.maitre.nopainnoscan.databinding.ActivityScannerBinding
+import com.maitre.nopainnoscan.ocr.Correction
+import com.maitre.nopainnoscan.ocr.NutrientField
+import com.maitre.nopainnoscan.ocr.NutritionCoherence
 import com.maitre.nopainnoscan.ocr.NutritionParse
 import com.maitre.nopainnoscan.ocr.NutritionParser
 import com.maitre.nopainnoscan.ocr.OcrLine
+import com.maitre.nopainnoscan.ocr.Problem
 import com.maitre.nopainnoscan.ui.ResultRenderer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -78,6 +85,9 @@ class ScannerActivity : AppCompatActivity() {
     private var candidateHits = 0
     private var lastParse: NutritionParse? = null
     private var goal: String? = null
+    // Formulaire ouvert à la main (pas de lecture OCR derrière) ; incohérence déjà signalée une fois.
+    private var manualEntry = false
+    private var softProblemsAcknowledged = false
 
     private val requestPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -123,6 +133,10 @@ class ScannerActivity : AppCompatActivity() {
         lifecycleScope.launch {
             goal = runCatching { ApiClient.get(this@ScannerActivity).getProfile().goal }.getOrNull()
         }
+        if (savedInstanceState == null && intent.getBooleanExtra(EXTRA_MANUAL, false)) {
+            binding.modeGroup.check(R.id.btnModeOcr)
+            showManualForm()
+        }
 
         val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED
@@ -157,6 +171,13 @@ class ScannerActivity : AppCompatActivity() {
         binding.ocrForm.btnRetry.setOnClickListener { resetSheet() }
         binding.ocrForm.btnSubmit.setOnClickListener { submitOcr() }
         binding.btnOcrAgain.setOnClickListener { resetSheet() }
+        binding.btnManual.setOnClickListener { showManualForm() }
+        // Toute retouche d'un champ invalide l'avertissement déjà affiché.
+        formFields().forEach { it.doAfterTextChanged { softProblemsAcknowledged = false } }
+    }
+
+    private fun formFields(): List<EditText> = with(binding.ocrForm) {
+        listOf(fieldKcal, fieldProtein, fieldCarbs, fieldSugars, fieldFat, fieldSatFat, fieldFiber, fieldSalt)
     }
 
     /**
@@ -182,8 +203,10 @@ class ScannerActivity : AppCompatActivity() {
         binding.ocrForm.root.visibility = View.GONE
         binding.btnOcrAgain.visibility = View.GONE
         binding.tvWaiting.visibility = View.VISIBLE
+        binding.btnManual.visibility = View.VISIBLE
         binding.tvWaiting.text = getString(if (mode == Mode.OCR) R.string.ocr_waiting else R.string.scanner_waiting)
         binding.tvHint.text = getString(if (mode == Mode.OCR) R.string.ocr_hint else R.string.scanner_hint)
+        manualEntry = false
         lastParse = null
         candidate = null
         lastScanned = null
@@ -278,21 +301,34 @@ class ScannerActivity : AppCompatActivity() {
                 line.boundingBox?.let { OcrLine(line.text, it.left, it.top, it.right, it.bottom) }
             }
         }
-        val parse = NutritionParser.parse(lines)
+        val result = NutritionParser.parseDetailed(lines)
+        val parse = result.parse
         if (!parse.isUsable) return
         val previous = lastParse
         lastParse = parse
         if (previous == null || !previous.matches(parse)) return
 
         isBusy = true
-        showOcrForm(parse)
+        showOcrForm(parse, result.corrections)
     }
 
-    private fun showOcrForm(parse: NutritionParse) {
+    /** Formulaire vide, analyse en pause : pour un produit sans code-barres ni tableau lisible. */
+    private fun showManualForm() {
+        isBusy = true
+        manualEntry = true
+        showOcrForm(NutritionParse(), emptyList())
+    }
+
+    private fun showOcrForm(parse: NutritionParse, corrections: List<Correction>) {
         binding.tvWaiting.visibility = View.GONE
+        binding.btnManual.visibility = View.GONE
         binding.result.root.visibility = View.GONE
+        softProblemsAcknowledged = false
         with(binding.ocrForm) {
             root.visibility = View.VISIBLE
+            tvFormTitle.setText(if (manualEntry) R.string.manual_title else R.string.ocr_review_title)
+            tvFormSub.setText(if (manualEntry) R.string.manual_sub else R.string.ocr_review_sub)
+            btnRetry.setText(if (manualEntry) R.string.manual_cancel else R.string.ocr_retry)
             fieldName.setText(getString(R.string.ocr_name_default))
             fieldKcal.setText(Fmt.field(parse.kcal))
             fieldProtein.setText(Fmt.field(parse.protein))
@@ -302,9 +338,32 @@ class ScannerActivity : AppCompatActivity() {
             fieldSatFat.setText(Fmt.field(parse.satFat))
             fieldFiber.setText(Fmt.field(parse.fiber))
             fieldSalt.setText(Fmt.field(parse.salt))
+            showNotice(corrections.takeIf { it.isNotEmpty() }?.let(::describe), warning = false)
         }
         collapseTo(binding.ocrForm.root)
     }
+
+    /** Bandeau sous le sous-titre : corrections appliquées (info) ou incohérences (alerte). */
+    private fun showNotice(text: String?, warning: Boolean) = with(binding.ocrForm.tvCorrections) {
+        visibility = if (text == null) View.GONE else View.VISIBLE
+        this.text = text
+        backgroundTintList = ContextCompat.getColorStateList(context, if (warning) R.color.warn_bg else R.color.info_bg)
+        setTextColor(ContextCompat.getColor(context, if (warning) R.color.warn_fg else R.color.info_fg))
+    }
+
+    private fun describe(corrections: List<Correction>): String =
+        getString(R.string.ocr_corrected, corrections.joinToString(" · ") {
+            "${getString(FIELD_LABELS.getValue(it.field))} ${Fmt.field(it.from)} → ${Fmt.field(it.to)}"
+        })
+
+    private fun describe(problem: Problem): String = getString(
+        when (problem) {
+            Problem.SUGARS_OVER_CARBS -> R.string.problem_sugars
+            Problem.SAT_FAT_OVER_FAT -> R.string.problem_sat_fat
+            Problem.SUM_OVER_100 -> R.string.problem_sum
+            Problem.ENERGY_MISMATCH -> R.string.problem_energy
+        }
+    )
 
     private fun submitOcr() {
         val form = binding.ocrForm
@@ -313,16 +372,33 @@ class ScannerActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.ocr_missing_kcal, Toast.LENGTH_SHORT).show()
             return
         }
+        val entered = NutritionParse(
+            kcal = kcal, protein = form.fieldProtein.num(), carbs = form.fieldCarbs.num(),
+            sugars = form.fieldSugars.num(), fat = form.fieldFat.num(), satFat = form.fieldSatFat.num(),
+            fiber = form.fieldFiber.num(), salt = form.fieldSalt.num(),
+        )
+        // Impossible physiquement : on bloque. Énergie discordante : on prévient, le 2e appui envoie.
+        val problems = NutritionCoherence.problems(entered)
+        val hard = problems.filter { it != Problem.ENERGY_MISMATCH }
+        if (hard.isNotEmpty()) {
+            showNotice(hard.joinToString("\n") { describe(it) }, warning = true)
+            return
+        }
+        if (problems.isNotEmpty() && !softProblemsAcknowledged) {
+            softProblemsAcknowledged = true
+            showNotice(problems.joinToString("\n") { describe(it) } + "\n" + getString(R.string.problem_send_anyway), warning = true)
+            return
+        }
         val dto = NutrientsDto(
             name = form.fieldName.text.toString().trim().ifBlank { getString(R.string.ocr_name_default) },
             kcal_100g = kcal,
-            protein_100g = form.fieldProtein.num() ?: 0.0,
-            carbs_100g = form.fieldCarbs.num() ?: 0.0,
-            sugars_100g = form.fieldSugars.num() ?: 0.0,
-            fat_100g = form.fieldFat.num() ?: 0.0,
-            saturated_fat_100g = form.fieldSatFat.num() ?: 0.0,
-            fiber_100g = form.fieldFiber.num() ?: 0.0,
-            salt_100g = form.fieldSalt.num() ?: 0.0,
+            protein_100g = entered.protein ?: 0.0,
+            carbs_100g = entered.carbs ?: 0.0,
+            sugars_100g = entered.sugars ?: 0.0,
+            fat_100g = entered.fat ?: 0.0,
+            saturated_fat_100g = entered.satFat ?: 0.0,
+            fiber_100g = entered.fiber ?: 0.0,
+            salt_100g = entered.salt ?: 0.0,
         )
         form.btnSubmit.isEnabled = false
         lifecycleScope.launch {
@@ -343,6 +419,7 @@ class ScannerActivity : AppCompatActivity() {
 
     private fun showScore(score: ScoreDto) {
         binding.tvWaiting.visibility = View.GONE
+        binding.btnManual.visibility = View.GONE
         binding.result.root.visibility = View.VISIBLE
         renderer.render(score, goal)
         // En OCR l'analyse reste en pause (isBusy) jusqu'à « Rescanner » : la carte reste lisible.
@@ -353,6 +430,7 @@ class ScannerActivity : AppCompatActivity() {
 
     private fun showFailure(e: Throwable) {
         binding.tvWaiting.visibility = View.VISIBLE
+        binding.btnManual.visibility = View.VISIBLE
         binding.result.root.visibility = View.GONE
         binding.tvWaiting.text = when ((e as? HttpException)?.code()) {
             404 -> getString(R.string.scanner_not_found)
@@ -368,8 +446,24 @@ class ScannerActivity : AppCompatActivity() {
         if (textRecognizerLazy.isInitialized()) textRecognizer.close()
     }
 
-    private companion object {
-        const val RESCAN_DELAY_MS = 3000L
-        const val CONFIRM_FRAMES = 2
+    companion object {
+        private const val RESCAN_DELAY_MS = 3000L
+        private const val CONFIRM_FRAMES = 2
+        private const val EXTRA_MANUAL = "manual"
+        private val FIELD_LABELS = mapOf(
+            NutrientField.KCAL to R.string.ocr_kcal,
+            NutrientField.PROTEIN to R.string.ocr_protein,
+            NutrientField.CARBS to R.string.ocr_carbs,
+            NutrientField.SUGARS to R.string.ocr_sugars,
+            NutrientField.FAT to R.string.ocr_fat,
+            NutrientField.SAT_FAT to R.string.ocr_satfat,
+            NutrientField.FIBER to R.string.ocr_fiber,
+            NutrientField.SALT to R.string.ocr_salt,
+        )
+
+        /** Ouvre directement le formulaire de saisie manuelle (depuis l'accueil). */
+        fun openManual(context: Context) {
+            context.startActivity(Intent(context, ScannerActivity::class.java).putExtra(EXTRA_MANUAL, true))
+        }
     }
 }

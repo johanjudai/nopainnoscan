@@ -125,6 +125,16 @@
             android:text="@string/scanner_waiting"
             android:textColor="@color/muted" />
 
+        <!-- Sans code-barres ni tableau lisible : le formulaire vide, à remplir soi-même. -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnManual"
+            style="@style/Widget.NoPainNoScan.Button.Text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start"
+            android:text="@string/manual_entry"
+            app:icon="@drawable/ic_edit" />
+
         <include
             android:id="@+id/ocrForm"
             layout="@layout/view_ocr_form"

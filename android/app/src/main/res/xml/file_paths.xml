@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Seul le dossier des APK téléchargés est exposé à l'installateur système. -->
+    <cache-path name="updates" path="updates/" />
+</paths>

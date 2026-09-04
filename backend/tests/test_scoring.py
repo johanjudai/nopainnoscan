@@ -2,20 +2,24 @@ from app.schemas import NutrientsIn
 from app.scoring import compute_score
 
 CHICKEN = NutrientsIn(
-    name="Blanc de poulet", kcal_100g=110, protein_100g=23, saturated_fat_100g=0.5
+    name="Blanc de poulet", kcal_100g=110, protein_100g=23, fat_100g=1.5, saturated_fat_100g=0.5
 )
 SPREAD = NutrientsIn(
     name="Pâte à tartiner",
     kcal_100g=539,
     protein_100g=6.3,
+    carbs_100g=57.5,
     sugars_100g=56.3,
+    fat_100g=30.9,
     saturated_fat_100g=10.6,
 )
 GRANOLA = NutrientsIn(
     name="Granola",
     kcal_100g=380,
     protein_100g=5,
+    carbs_100g=60,
     sugars_100g=30,
+    fat_100g=12,
     saturated_fat_100g=3,
     fiber_100g=4,
 )

@@ -142,6 +142,19 @@
                     app:icon="@drawable/ic_scan_frame"
                     app:iconGravity="textStart"
                     app:iconTint="@color/coral" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnManual"
+                    style="@style/Widget.NoPainNoScan.Button.Text"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/main_manual_entry"
+                    android:textColor="@color/on_coral"
+                    app:icon="@drawable/ic_edit"
+                    app:iconGravity="textStart"
+                    app:iconTint="@color/on_coral"
+                    app:rippleColor="@color/on_coral" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

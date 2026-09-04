@@ -167,20 +167,38 @@ dans le canvas Claude Design lié au projet.
   avec anneau de score, catégorie, détail bonus / malus et alternatives mieux notées dans l'enseigne.
   Le scan est **live** : CameraX pousse chaque frame (720p) à ML Kit on-device, un code doit
   être lu sur 2 frames consécutives avant d'interroger l'API.
-- **Profil** : sexe et objectif en contrôles segmentés, activité en menu, mensurations ;
+- **Profil** : sexe et objectif en contrôles segmentés, activité en menu (de « pas de sport »
+  à « athlète », facteurs 1,2 → 1,9), mensurations ;
   la masse grasse et les cibles s'affichent au fil de la saisie via `POST /profile/estimate`
   (débounce 350 ms), avec un message d'info ou d'alerte si une cible est modifiée à la main.
 - **Scanner, mode « Tableau nutritionnel »** : OCR live (ML Kit Text Recognition) pour les
-  produits sans code-barres. Les lignes reconnues sont regroupées par rangée, la première
-  valeur après chaque libellé (colonne « pour 100 g ») est retenue ; deux lectures stables
-  d'affilée ouvrent un formulaire de vérification avant `POST /scan/manual`.
+  produits sans code-barres. Les lignes reconnues sont regroupées par rangée ; la colonne
+  « pour 100 g » est repérée depuis l'en-tête (avant ou après la portion) ; « sodium » est
+  converti en sel ; les lettres lues à la place de chiffres (`O`, `l`) et les virgules
+  perdues (`8 5 g`) sont réparées. Une passe de **cohérence** corrige ensuite ce que la
+  physique interdit, toujours en divisant par 10 (virgule perdue) : sucres ≤ glucides,
+  saturés ≤ lipides, somme ≤ 100 g, énergie ≈ 4·P + 4·G + 9·L. Deux lectures stables
+  d'affilée ouvrent un formulaire de vérification qui liste les corrections appliquées ;
+  à l'envoi, une incohérence restante bloque (ou avertit, pour l'énergie) avant
+  `POST /scan/manual`. Le backend refuse de son côté un tableau impossible (422).
+- **Saisie manuelle** : bouton sur l'accueil et dans le scanner pour remplir le tableau
+  soi-même (produit sans code-barres ni étiquette lisible), même formulaire, mêmes contrôles.
 - **Feuille de résultat glissante** : repliée sur la note et le détail, tirée vers le haut
   elle révèle le repas conseillé (portion + complément) puis les alternatives.
 - **Fiche produit** : depuis l'historique ou une alternative, note actuelle, repas conseillé
-  et alternatives.
+  et alternatives. Un appui sur la photo l'ouvre en plein écran, zoomable (pleine
+  résolution Open Food Facts, repli sur la vignette).
 - **Recommandations** : famille de produit, enseigne facultative, liste classée des meilleurs
   produits pour ton objectif.
-- **Réglages** : URL de l'API, clé, test de connexion.
+- **Réglages** : URL de l'API, clé, test de connexion, version installée et vérification
+  manuelle des mises à jour.
+- **Mise à jour automatique** : au plus toutes les 6 h, l'app interroge
+  `api.github.com/repos/<dépôt>/releases/latest`. Si le tag est plus récent que la version
+  installée, un dialogue propose d'installer (« Plus tard » / « Ignorer cette version »).
+  L'APK est téléchargé dans le cache privé, son empreinte SHA-256 comparée à celle publiée
+  par GitHub, puis remis à l'installateur système, qui refuse tout APK signé avec une autre
+  clé que l'app installée. Première fois : Android demande d'autoriser l'installation
+  depuis NoPainNoScan.
 
 Sécurité côté app : clé API en stockage privé (`allowBackup=false`), un seul
 client HTTP partagé avec timeouts courts. L'API peut être appelée en `http://`,

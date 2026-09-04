@@ -37,8 +37,12 @@ class ResultRenderer(
         binding.ring.set(score.score, ContextCompat.getColor(context, category.color))
         binding.chipCategory.showPill(context.getString(category.label), category)
         binding.tvProduct.text = score.product_name
-        binding.ivImage.visibility = if (score.image_url.isNullOrBlank()) View.GONE else View.VISIBLE
-        score.image_url?.let { binding.ivImage.load(it) { crossfade(true) } }
+        val image = score.image_url?.takeIf { it.isNotBlank() }
+        binding.ivImage.visibility = if (image == null) View.GONE else View.VISIBLE
+        image?.let { url ->
+            binding.ivImage.load(url) { crossfade(true) }
+            binding.ivImage.setOnClickListener { PhotoDialog.show(context, url, binding.ivImage.drawable) }
+        }
 
         val goalText = context.getString(goalLabelLower(goal))
         val store = Store.fromSlug(score.store)

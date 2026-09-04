@@ -21,6 +21,8 @@ android {
         versionName = appVersionName
 
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        // Dépôt public dont les Releases servent de canal de mise à jour.
+        buildConfigField("String", "GITHUB_REPO", "\"johanjudai/nopainnoscan\"")
     }
 
     signingConfigs {

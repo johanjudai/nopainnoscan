@@ -9,6 +9,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.maitre.nopainnoscan.api.ApiClient
 import com.maitre.nopainnoscan.api.ProfileOutDto
 import com.maitre.nopainnoscan.databinding.ActivityMainBinding
+import com.maitre.nopainnoscan.update.UpdatePrompt
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -20,6 +21,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val adapter = ScanAdapter { ProductActivity.open(this, it.product_id) }
+    private val updates by lazy { UpdatePrompt(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,6 +33,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnScan.setOnClickListener { open(ScannerActivity::class.java) }
         binding.cardScan.setOnClickListener { open(ScannerActivity::class.java) }
+        binding.btnManual.setOnClickListener { ScannerActivity.openManual(this) }
         binding.tileProfile.setOnClickListener { open(ProfileActivity::class.java) }
         binding.tileTargets.setOnClickListener { open(ProfileActivity::class.java) }
         binding.btnSettings.setOnClickListener { open(SettingsActivity::class.java) }
@@ -40,6 +43,8 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refresh()
+        updates.resumePendingInstall()
+        updates.checkAutomatically()
     }
 
     private fun refresh() = lifecycleScope.launch {
