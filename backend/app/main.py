@@ -1,16 +1,25 @@
+import re
+
 from fastapi import Depends, FastAPI, HTTPException, Query
+from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
 
 from . import body, meal, migrations, models, schemas, scoring, services
 from .auth import current_user
 from .categories import CATEGORY_LABELS
+from .config import DEBUG
 from .database import engine, get_db
 from .stores import STORE_LABELS
 
 models.Base.metadata.create_all(bind=engine)
 migrations.run(engine)
 
-app = FastAPI(title="NoPainNoScan API", docs_url="/docs", redoc_url=None)
+app = FastAPI(
+    title="NoPainNoScan API",
+    docs_url="/docs" if DEBUG else None,
+    redoc_url=None,
+    openapi_url="/openapi.json" if DEBUG else None,
+)
 
 # Routes sync volontairement : SQLAlchemy est bloquant, FastAPI les exécute dans un threadpool
 # sans geler la boucle d'événements.
@@ -27,24 +36,26 @@ def _score_response(
     result = scoring.compute_score(product, goal)
     if record:
         services.record_scan(db, user, product, store, result)
+    services.ensure_image(db, product)
     services.seed_alternatives(db, product.category, store)
-    alternatives, scope = services.find_alternatives(db, product, goal, store, result["score"])
+    here, elsewhere = services.find_alternatives(db, product, goal, store, result["score"])
     db.commit()
     return schemas.ScoreOut(
         product_id=product.id,
         product_name=product.name,
-        image_url=product.image_url,
+        image_url=product.image_url or None,
         source=product.source,
         store=store,
-        alternatives=alternatives,
-        alternatives_scope=scope,
+        alternatives=here,
+        alternatives_elsewhere=elsewhere,
         meal=meal.suggest(product, user.profile),
         **result,
     )
 
 
 @app.get("/health")
-def health():
+def health(db: Session = Depends(get_db)):
+    db.execute(text("SELECT 1"))  # un healthcheck qui ment quand la base est tombée ne sert à rien
     return {"status": "ok"}
 
 
@@ -74,9 +85,11 @@ def recommendations(
     """Les meilleurs produits d'une famille pour ce profil, dans l'enseigne si possible."""
     if category not in CATEGORY_LABELS:
         raise HTTPException(422, "Famille inconnue : voir GET /categories.")
-    items, scope = services.recommend(db, category, _goal(user), store, limit)
+    here, elsewhere = services.recommend(db, category, _goal(user), store, limit)
     db.commit()
-    return schemas.RecommendationsOut(category=category, store=store, scope=scope, items=items)
+    return schemas.RecommendationsOut(
+        category=category, store=store, items=here, items_elsewhere=elsewhere
+    )
 
 
 # ---------- Profil (propre à chaque utilisateur) ----------
@@ -132,7 +145,7 @@ def scan_barcode(
     user: models.User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
-    if not barcode.isdigit() or not 8 <= len(barcode) <= 14:
+    if not re.fullmatch(r"[0-9]{8,14}", barcode):  # isdigit() accepte les chiffres Unicode
         raise HTTPException(422, "Code-barres invalide (EAN-8 / EAN-13 / GTIN-14 attendu).")
 
     product = services.get_or_fetch_product(db, barcode)
@@ -186,7 +199,7 @@ def scan_history(
             id=s.id,
             product_id=s.product_id,
             product_name=s.product.name,
-            image_url=s.product.image_url,
+            image_url=s.product.image_url or None,
             store=s.store,
             score=s.score,
             category=s.category,

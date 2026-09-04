@@ -43,6 +43,7 @@ object NutritionParser {
 
     private val NUMBER = Regex("""<?\s*(\d+(?:[.,]\d+)?)\s*(mg|g|kcal|kj|%)?""")
     private val KCAL = Regex("""(\d+(?:[.,]\d+)?)\s*kcal""")
+    private val DIACRITICS = Regex("\\p{Mn}+")
 
     // Ordre important : les libellés « dont … » doivent gagner sur leur parent.
     private val LABELS: List<Pair<Regex, (NutritionParse, Double) -> NutritionParse>> = listOf(
@@ -100,7 +101,7 @@ object NutritionParser {
 
     private fun normalize(text: String): String =
         Normalizer.normalize(text, Normalizer.Form.NFD)
-            .replace(Regex("\\p{Mn}+"), "")
+            .replace(DIACRITICS, "")
             .lowercase()
 
     private fun String.toNum(): Double = replace(',', '.').toDouble()

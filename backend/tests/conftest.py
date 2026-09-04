@@ -23,6 +23,7 @@ _Session = sessionmaker(bind=_engine, autoflush=False)
 def no_network(monkeypatch):
     """Jamais d'appel Open Food Facts réel dans les tests."""
     monkeypatch.setattr(services, "fetch_product_from_off", lambda barcode: None)
+    monkeypatch.setattr(services, "fetch_product_detail", lambda barcode: (None, True))
     monkeypatch.setattr(services, "search_products", lambda category, store: [])
 
 
@@ -53,3 +54,27 @@ def api_key(db):
 @pytest.fixture
 def headers(api_key):
     return {"X-Api-Key": api_key}
+
+
+@pytest.fixture
+def off_product(db):
+    """Crée un produit vérifié (source OFF) avec ses enseignes : la seule référence acceptée."""
+
+    def make(name, category, kcal, protein, stores=(), **fields):
+        product = models.Product(
+            barcode=f"off-{name}",
+            name=name,
+            category=category,
+            kcal_100g=kcal,
+            protein_100g=protein,
+            source="off",
+            **fields,
+        )
+        db.add(product)
+        db.flush()
+        for store in stores:
+            db.add(models.ProductStore(product_id=product.id, store=store))
+        db.commit()
+        return product
+
+    return make

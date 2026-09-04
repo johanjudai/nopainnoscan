@@ -1,8 +1,16 @@
+# Rotation des logs pour les deux conteneurs.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   nopainnoscan-db:
     image: postgres:16-alpine
     container_name: nopainnoscan-db
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-nopainnoscan}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definir POSTGRES_PASSWORD dans .env}
@@ -21,13 +29,20 @@ services:
     build: ./backend
     container_name: nopainnoscan-api
     restart: unless-stopped
+    logging: *logging
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-nopainnoscan}:${POSTGRES_PASSWORD}@nopainnoscan-db:5432/${POSTGRES_DB:-nopainnoscan}
+      # L'URL est construite côté appli (mot de passe encodé) : pas de caractère interdit possible.
+      POSTGRES_HOST: nopainnoscan-db
+      POSTGRES_USER: ${POSTGRES_USER:-nopainnoscan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definir POSTGRES_PASSWORD dans .env}
+      POSTGRES_DB: ${POSTGRES_DB:-nopainnoscan}
+      DEBUG: ${DEBUG:-0}
     depends_on:
       nopainnoscan-db:
         condition: service_healthy
     ports:
-      - "${API_PORT:-8088}:8000"
+      # Limiter à une IP (ex. "192.168.1.10:8088:8000") ou passer par un reverse proxy TLS.
+      - "${API_BIND:-0.0.0.0}:${API_PORT:-8088}:8000"
     networks:
       - nopainnoscan-net
 

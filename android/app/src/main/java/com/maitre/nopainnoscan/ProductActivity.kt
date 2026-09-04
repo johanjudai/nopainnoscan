@@ -32,7 +32,11 @@ class ProductActivity : AppCompatActivity() {
         binding.result.root.visibility = View.INVISIBLE
 
         lifecycleScope.launch {
-            val api = ApiClient.get(this@ProductActivity)
+            val api = runCatching { ApiClient.get(this@ProductActivity) }.getOrNull() ?: run {
+                binding.tvError.visibility = View.VISIBLE
+                binding.result.root.visibility = View.GONE
+                return@launch
+            }
             val (attempt, goal) = coroutineScope {
                 val score = async { runCatching { api.product(productId, store?.slug) } }
                 val goal = async { runCatching { api.getProfile().goal }.getOrNull() }

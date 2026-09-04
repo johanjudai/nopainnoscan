@@ -3,11 +3,12 @@
 import logging
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import models, scoring
-from .config import ALTERNATIVES_LIMIT, SEED_TTL_DAYS
-from .off_client import fetch_product_from_off, search_products
+from .config import ALTERNATIVES_LIMIT, SEED_RETRY_MINUTES, SEED_TTL_DAYS, SEED_VERSION
+from .off_client import fetch_product_detail, fetch_product_from_off, search_products
 from .schemas import AlternativeOut, NutrientsIn, RecommendationOut
 
 logger = logging.getLogger(__name__)
@@ -31,14 +32,45 @@ def create_manual_product(db: Session, nutrients: NutrientsIn) -> models.Product
     return product
 
 
-def _insert_product(db: Session, barcode: str, source: str, data: dict) -> models.Product:
-    stores = data.pop("stores", set())
-    product = models.Product(barcode=barcode, source=source, **data)
-    db.add(product)
+def ensure_image(db: Session, product: models.Product) -> None:
+    """Rattrape la photo d'une fiche OFF importée avant la colonne image ; une seule tentative."""
+    if product.image_url is not None or product.source != "off" or not product.barcode:
+        return
+    data, reached = fetch_product_detail(product.barcode)
+    if not reached:
+        return  # OFF injoignable : on réessaiera, ce n'est pas « pas de photo »
+    # "" = déjà cherché, pas de photo : évite de retaper OFF à chaque consultation.
+    product.image_url = (data or {}).get("image_url") or ""
     db.flush()
+
+
+def _insert_product(db: Session, barcode: str, source: str, data: dict) -> models.Product:
+    """Insère, ou récupère la ligne si un autre scan a inséré le même code-barres entre-temps."""
+    stores = data.pop("stores", set())
+    if source == "off" and data.get("image_url") is None:
+        data["image_url"] = ""  # OFF consulté, pas de photo : ne pas re-chercher à la consultation
+    product = models.Product(barcode=barcode, source=source, **data)
+    try:
+        with db.begin_nested():
+            db.add(product)
+            db.flush()
+    except IntegrityError:
+        product = db.query(models.Product).filter(models.Product.barcode == barcode).one()
     for store in stores:
-        db.merge(models.ProductStore(product_id=product.id, store=store))
+        link_store(db, product.id, store)
     return product
+
+
+def link_store(db: Session, product_id: int, store: str) -> None:
+    """« Vu dans cette enseigne », idempotent et tolérant à un lien posé en parallèle."""
+    if db.get(models.ProductStore, (product_id, store)):
+        return
+    try:
+        with db.begin_nested():
+            db.add(models.ProductStore(product_id=product_id, store=store))
+            db.flush()
+    except IntegrityError:
+        pass
 
 
 def record_scan(
@@ -54,8 +86,7 @@ def record_scan(
         )
     )
     if store:
-        # Le scan en magasin vaut « vu dans cette enseigne » : upsert sans erreur si déjà connu.
-        db.merge(models.ProductStore(product_id=product.id, store=store))
+        link_store(db, product.id, store)  # le scan en magasin vaut « vu dans cette enseigne »
 
 
 def seed_alternatives(db: Session, category: str | None, store: str | None) -> None:
@@ -68,18 +99,33 @@ def seed_alternatives(db: Session, category: str | None, store: str | None) -> N
         fetched = seed.fetched_at
         if fetched.tzinfo is None:  # SQLite renvoie des datetimes naïfs
             fetched = fetched.replace(tzinfo=UTC)
-        if fetched > datetime.now(UTC) - timedelta(days=SEED_TTL_DAYS):
+        age = datetime.now(UTC) - fetched
+        if seed.version == SEED_VERSION and age < timedelta(days=SEED_TTL_DAYS):
             return
+        if seed.version == SEED_FAILED and age < timedelta(minutes=SEED_RETRY_MINUTES):
+            return  # dernier essai en échec : on laisse OFF respirer
 
     # Au mieux : un import raté ne doit jamais faire échouer le scan qui l'a déclenché.
     try:
+        found = search_products(category, store)
         with db.begin_nested():
-            _import_products(db, search_products(category, store))
+            if found is None:
+                logger.warning("OFF injoignable pour %s / %s", category, store or "toutes")
+                version = SEED_FAILED
+            else:
+                _import_products(db, found)
+                version = SEED_VERSION
             db.merge(
-                models.AlternativeSeed(category=category, store=key, fetched_at=datetime.now(UTC))
+                models.AlternativeSeed(
+                    category=category, store=key, version=version, fetched_at=datetime.now(UTC)
+                )
             )
     except Exception:
         logger.exception("Amorçage OFF impossible pour %s / %s", category, store or "toutes")
+
+
+# Valeur de `version` marquant un dernier essai en échec (mémo court, cf. SEED_RETRY_MINUTES).
+SEED_FAILED = 0
 
 
 def _import_products(db: Session, found: list[dict]) -> None:
@@ -93,10 +139,13 @@ def _import_products(db: Session, found: list[dict]) -> None:
     }
     for data in found:
         barcode = data.pop("barcode")
+        stores = data.get("stores", set())
         existing = known.get(barcode)
         if existing:
             if not existing.image_url and data.get("image_url"):
                 existing.image_url = data["image_url"]  # rattrape les fiches importées sans photo
+            for store in stores:
+                link_store(db, existing.id, store)
             continue
         known[barcode] = _insert_product(db, barcode=barcode, source="off", data=data)
     db.flush()
@@ -104,73 +153,72 @@ def _import_products(db: Session, found: list[dict]) -> None:
 
 def find_alternatives(
     db: Session, product: models.Product, goal: str, store: str | None, current_score: float
-) -> tuple[list[AlternativeOut], str]:
-    """Même famille, mieux notés pour ce profil ; dans l'enseigne si possible, sinon partout."""
+) -> tuple[list[AlternativeOut], list[AlternativeOut]]:
+    """(dans l'enseigne, ailleurs). Sans enseigne : (toutes, [])."""
     if not product.category:
-        return [], "any"
-    if store:
-        found = _better_in_category(db, product, goal, store, current_score)
-        if found:
-            return found, "store"
-    return _better_in_category(db, product, goal, None, current_score), "any"
+        return [], []
+    better = [
+        AlternativeOut(product_id=p.id, name=p.name, image_url=p.image_url or None, **score)
+        for p, score in _ranked(db, product.category, goal, exclude_id=product.id)
+        if score["score"] > current_score
+    ]
+    return _split_by_store(db, product.category, store, better, ALTERNATIVES_LIMIT)
 
 
-def _better_in_category(
-    db: Session, product: models.Product, goal: str, store: str | None, current_score: float
-) -> list[AlternativeOut]:
+def recommend(
+    db: Session, category: str, goal: str, store: str | None, limit: int
+) -> tuple[list[RecommendationOut], list[RecommendationOut]]:
+    """(dans l'enseigne, ailleurs), chaque groupe classé par note décroissante."""
+    seed_alternatives(db, category, store)
+    items = [
+        RecommendationOut(
+            product_id=p.id,
+            name=p.name,
+            image_url=p.image_url or None,
+            kcal_100g=p.kcal_100g,
+            protein_100g=p.protein_100g,
+            **score,
+        )
+        for p, score in _ranked(db, category, goal)
+    ]
+    return _split_by_store(db, category, store, items, limit)
+
+
+# ---------- helpers ----------
+
+
+def _ranked(
+    db: Session, category: str, goal: str, exclude_id: int | None = None
+) -> list[tuple[models.Product, dict]]:
+    """Produits de la famille avec leur score pour l'objectif, du meilleur au moins bon."""
+    # Les saisies manuelles (OCR) ne servent jamais de référence : valeurs non vérifiées.
     query = db.query(models.Product).filter(
-        models.Product.category == product.category, models.Product.id != product.id
+        models.Product.category == category, models.Product.source != "manual"
     )
-    if store:
-        query = query.join(
-            models.ProductStore, models.ProductStore.product_id == models.Product.id
-        ).filter(models.ProductStore.store == store)
-
+    if exclude_id is not None:
+        query = query.filter(models.Product.id != exclude_id)
     # Le cache reste petit (usage perso) : le scoring en Python sur la famille suffit.
-    scored = (
-        AlternativeOut(product_id=p.id, name=p.name, image_url=p.image_url, **_score_only(p, goal))
-        for p in query.all()
+    scored = [(p, _score_only(p, goal)) for p in query.all()]
+    scored.sort(key=lambda item: item[1]["score"], reverse=True)
+    return scored
+
+
+def _split_by_store(db: Session, category: str, store: str | None, items: list, limit: int):
+    """Sans enseigne : (tout, []). Avec : (vus dans l'enseigne, vus ailleurs seulement)."""
+    if not store:
+        return items[:limit], []
+    rows = (
+        db.query(models.ProductStore.product_id)
+        .join(models.Product, models.Product.id == models.ProductStore.product_id)
+        .filter(models.ProductStore.store == store, models.Product.category == category)
+        .all()
     )
-    better = [alt for alt in scored if alt.score > current_score]
-    better.sort(key=lambda alt: alt.score, reverse=True)
-    return better[:ALTERNATIVES_LIMIT]
+    in_store = {product_id for (product_id,) in rows}
+    here = [i for i in items if i.product_id in in_store][:limit]
+    elsewhere = [i for i in items if i.product_id not in in_store][:limit]
+    return here, elsewhere
 
 
 def _score_only(product: models.Product, goal: str) -> dict:
     result = scoring.compute_score(product, goal)
     return {"score": result["score"], "category": result["category"]}
-
-
-def recommend(
-    db: Session, category: str, goal: str, store: str | None, limit: int
-) -> tuple[list[RecommendationOut], str]:
-    """Meilleurs produits d'une famille pour ce profil ; enseigne si possible, sinon partout."""
-    seed_alternatives(db, category, store)
-    if store:
-        items = _ranked_in_category(db, category, goal, store, limit)
-        if items:
-            return items, "store"
-    return _ranked_in_category(db, category, goal, None, limit), "any"
-
-
-def _ranked_in_category(
-    db: Session, category: str, goal: str, store: str | None, limit: int
-) -> list[RecommendationOut]:
-    query = db.query(models.Product).filter(models.Product.category == category)
-    if store:
-        query = query.join(
-            models.ProductStore, models.ProductStore.product_id == models.Product.id
-        ).filter(models.ProductStore.store == store)
-    items = [
-        RecommendationOut(
-            product_id=p.id,
-            name=p.name,
-            kcal_100g=p.kcal_100g,
-            protein_100g=p.protein_100g,
-            image_url=p.image_url,
-            **_score_only(p, goal),
-        )
-        for p in query.all()
-    ]
-    items.sort(key=lambda item: item.score, reverse=True)
-    return items[:limit]

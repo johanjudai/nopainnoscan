@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from .categories import CATEGORY_LABELS
 
 Goal = Literal["cut", "maintenance", "bulk"]
 Category = Literal["parfait", "pas_mal", "a_eviter", "a_ne_pas_manger"]
@@ -72,14 +74,21 @@ class NutrientsIn(BaseModel):
 
     name: str = Field(min_length=1, max_length=255)
     category: str | None = Field(default=None, max_length=128)
-    kcal_100g: float = Field(ge=0)
-    protein_100g: float = Field(default=0, ge=0)
-    carbs_100g: float = Field(default=0, ge=0)
-    sugars_100g: float = Field(default=0, ge=0)
-    fat_100g: float = Field(default=0, ge=0)
-    saturated_fat_100g: float = Field(default=0, ge=0)
-    fiber_100g: float = Field(default=0, ge=0)
-    salt_100g: float = Field(default=0, ge=0)
+    kcal_100g: float = Field(ge=0, le=1000, allow_inf_nan=False)
+    protein_100g: float = Field(default=0, ge=0, le=100, allow_inf_nan=False)
+    carbs_100g: float = Field(default=0, ge=0, le=100, allow_inf_nan=False)
+    sugars_100g: float = Field(default=0, ge=0, le=100, allow_inf_nan=False)
+    fat_100g: float = Field(default=0, ge=0, le=100, allow_inf_nan=False)
+    saturated_fat_100g: float = Field(default=0, ge=0, le=100, allow_inf_nan=False)
+    fiber_100g: float = Field(default=0, ge=0, le=100, allow_inf_nan=False)
+    salt_100g: float = Field(default=0, ge=0, le=100, allow_inf_nan=False)
+
+    @field_validator("category")
+    @classmethod
+    def _known_category(cls, value: str | None) -> str | None:
+        if value is not None and value not in CATEGORY_LABELS:
+            raise ValueError("famille inconnue : voir GET /categories")
+        return value
 
 
 class AlternativeOut(BaseModel):
@@ -125,9 +134,10 @@ class ScoreOut(BaseModel):
     breakdown: dict[str, float]
     source: str
     store: Store | None = None
+    # Avec une enseigne : `alternatives` = vues dans l'enseigne, `alternatives_elsewhere` = les
+    # autres. Sans enseigne : tout dans `alternatives`.
     alternatives: list[AlternativeOut] = []
-    # "store" : vues dans l'enseigne demandée ; "any" : repli sur toutes les enseignes.
-    alternatives_scope: Literal["store", "any"] = "any"
+    alternatives_elsewhere: list[AlternativeOut] = []
     meal: MealOut | None = None  # None sans profil
 
 
@@ -162,6 +172,5 @@ class RecommendationOut(BaseModel):
 class RecommendationsOut(BaseModel):
     category: str
     store: Store | None
-    # "store" : produits vus dans l'enseigne ; "any" : repli sur toutes les enseignes.
-    scope: Literal["store", "any"]
-    items: list[RecommendationOut]
+    items: list[RecommendationOut]  # dans l'enseigne (ou tout, sans enseigne)
+    items_elsewhere: list[RecommendationOut] = []  # vus dans d'autres enseignes seulement

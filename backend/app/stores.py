@@ -35,5 +35,5 @@ def slugify(value: str) -> str:
 
 def match_store_tags(tags: list[str] | None) -> set[str]:
     """`['E.Leclerc', 'Carrefour Market']` -> `{'leclerc', 'carrefour'}`."""
-    slugs = {slugify(t) for t in tags or []}
+    slugs = {slugify(t) for t in (tags or []) if isinstance(t, str)}
     return {store for store, aliases in STORE_OFF_TAGS.items() if slugs & set(aliases)}

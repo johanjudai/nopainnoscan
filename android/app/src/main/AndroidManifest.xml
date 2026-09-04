@@ -5,7 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-feature android:name="android.hardware.camera.any" android:required="true" />
 
-    <!-- usesCleartextTraffic : l'API est appelée en http:// sur le LAN. À retirer si TLS via reverse proxy. -->
+    <!-- usesCleartextTraffic : l'API est appelée en http:// sur le LAN. Les Réglages n'acceptent http://
+         que vers une adresse privée (10/8, 172.16/12, 192.168/16, .local) ; tout le reste doit être https. -->
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"

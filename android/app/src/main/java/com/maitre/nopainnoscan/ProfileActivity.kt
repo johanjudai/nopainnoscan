@@ -73,15 +73,28 @@ class ProfileActivity : AppCompatActivity() {
         binding.groupSex.addOnButtonCheckedListener { _, _, checked ->
             if (checked) {
                 updateHipsVisibility()
-                scheduleEstimate()
+                if (!programmatic) scheduleEstimate()
             }
         }
-        binding.groupGoal.addOnButtonCheckedListener { _, _, checked -> if (checked) scheduleEstimate() }
+        binding.groupGoal.addOnButtonCheckedListener { _, _, checked -> if (checked && !programmatic) scheduleEstimate() }
         binding.fieldActivity.setOnItemClickListener { _, _, _, _ -> scheduleEstimate() }
 
         updateHipsVisibility()
         binding.btnSave.setOnClickListener { save() }
-        load()
+        if (savedInstanceState == null) {
+            load()
+        } else {
+            // Rotation : les champs sont restaurés par le système, on garde la saisie en cours.
+            kcalOverride = savedInstanceState.getBoolean(KEY_KCAL_OVERRIDE)
+            proteinOverride = savedInstanceState.getBoolean(KEY_PROTEIN_OVERRIDE)
+            scheduleEstimate()
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_KCAL_OVERRIDE, kcalOverride)
+        outState.putBoolean(KEY_PROTEIN_OVERRIDE, proteinOverride)
     }
 
     // ---------- lecture / écriture des champs ----------
@@ -156,7 +169,7 @@ class ProfileActivity : AppCompatActivity() {
         kcalOverride = profile.daily_kcal_target != null
         proteinOverride = profile.daily_protein_target_g != null
         updateHipsVisibility()
-        render(profile.estimate)
+        profile.estimate?.let(::render) ?: scheduleEstimate()
     }
 
     private fun scheduleEstimate() {
@@ -205,8 +218,9 @@ class ProfileActivity : AppCompatActivity() {
         binding.btnResetProtein.visibility = if (proteinOverride) View.VISIBLE else View.GONE
         binding.btnResetProtein.text = getString(R.string.profile_reset_to, Fmt.int(est.protein_target_auto))
 
-        renderMessage(binding.msgKcal, est.messages.firstOrNull { it.field == "kcal" })
-        renderMessage(binding.msgProtein, est.messages.firstOrNull { it.field == "protein" })
+        val messages = est.messages.orEmpty()
+        renderMessage(binding.msgKcal, messages.firstOrNull { it.field == "kcal" })
+        renderMessage(binding.msgProtein, messages.firstOrNull { it.field == "protein" })
     }
 
     private fun renderBodyFat(est: EstimateDto) {
@@ -258,5 +272,7 @@ class ProfileActivity : AppCompatActivity() {
 
     private companion object {
         const val DEBOUNCE_MS = 350L
+        const val KEY_KCAL_OVERRIDE = "kcal_override"
+        const val KEY_PROTEIN_OVERRIDE = "protein_override"
     }
 }

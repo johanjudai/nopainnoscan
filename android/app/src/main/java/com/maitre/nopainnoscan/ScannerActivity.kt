@@ -22,6 +22,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.chip.Chip
@@ -193,6 +194,8 @@ class ScannerActivity : AppCompatActivity() {
     private fun startCamera() {
         val providerFuture = ProcessCameraProvider.getInstance(this)
         providerFuture.addListener({
+            // L'utilisateur a pu quitter avant que la caméra soit prête : binder planterait.
+            if (lifecycle.currentState == Lifecycle.State.DESTROYED) return@addListener
             val provider = providerFuture.get()
 
             val preview = Preview.Builder().build().also {
@@ -237,7 +240,7 @@ class ScannerActivity : AppCompatActivity() {
 
     /** Exige le même code sur 2 frames consécutives : évite les lectures parasites. */
     private fun onBarcode(code: String?) {
-        if (code == null || code == lastScanned) return
+        if (mode != Mode.BARCODE || code == null || code == lastScanned) return
         if (code != candidate) {
             candidate = code
             candidateHits = 1

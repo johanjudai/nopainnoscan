@@ -3,7 +3,7 @@ import secrets
 
 from fastapi import Depends, HTTPException, Security
 from fastapi.security import APIKeyHeader
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from .database import get_db
 from .models import User
@@ -25,7 +25,12 @@ def current_user(
     # On cherche par hash : la clé en clair n'est jamais stockée ni comparée directement.
     user = None
     if api_key:
-        user = db.query(User).filter(User.api_key_hash == hash_key(api_key)).first()
+        user = (
+            db.query(User)
+            .options(joinedload(User.profile))
+            .filter(User.api_key_hash == hash_key(api_key))
+            .first()
+        )
     if not user:
         raise HTTPException(401, "Clé API manquante ou invalide.")
     return user

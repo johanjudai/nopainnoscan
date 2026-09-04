@@ -100,10 +100,11 @@ jobs:
       - name: Rename & locate APK
         id: rename
         run: |
+          # Split ABI : le fichier s'appelle app-arm64-v8a-<type>.apk.
           if [[ "${{ steps.keystore.outputs.signed }}" == "true" ]]; then
-            SRC="app/build/outputs/apk/release/app-release.apk"
+            SRC=$(ls app/build/outputs/apk/release/*.apk | head -1)
           else
-            SRC="app/build/outputs/apk/debug/app-debug.apk"
+            SRC=$(ls app/build/outputs/apk/debug/*.apk | head -1)
           fi
           APK_NAME="nopainnoscan-${{ steps.version.outputs.tag_label }}.apk"
           mv "$SRC" "$APK_NAME"

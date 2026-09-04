@@ -53,7 +53,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Les trois appels partent en parallèle : l'écran s'affiche en un aller-retour.
-        val api = ApiClient.get(this@MainActivity)
+        val api = runCatching { ApiClient.get(this@MainActivity) }.getOrNull() ?: run {
+            showStatus(connected = false)  // URL enregistrée inutilisable : on ne plante pas
+            renderDate(goal = null)
+            return@launch
+        }
         val (me, profile, scans) = coroutineScope {
             val me = async { runCatching { api.me() }.getOrNull() }
             val profile = async { runCatching { api.getProfile() }.getOrNull() }
@@ -62,8 +66,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         showStatus(connected = me != null)
-        binding.tvGreeting.text = me?.let {
-            getString(R.string.main_greeting, it.name.replaceFirstChar { c -> c.titlecase(Locale.FRENCH) })
+        binding.tvGreeting.text = me?.name?.let {
+            getString(R.string.main_greeting, it.replaceFirstChar { c -> c.titlecase(Locale.FRENCH) })
         } ?: getString(R.string.main_greeting_anonymous)
         renderDate(profile?.goal)
         renderTiles(profile)
