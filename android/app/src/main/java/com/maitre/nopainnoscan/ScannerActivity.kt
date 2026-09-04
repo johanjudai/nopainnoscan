@@ -23,6 +23,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.chip.Chip
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
@@ -58,6 +59,7 @@ class ScannerActivity : AppCompatActivity() {
     private lateinit var prefs: AppPrefs
     private lateinit var renderer: ResultRenderer
     private lateinit var cameraExecutor: ExecutorService
+    private lateinit var sheet: BottomSheetBehavior<View>
 
     private val barcodeScanner = BarcodeScanning.getClient(
         BarcodeScannerOptions.Builder()
@@ -97,16 +99,26 @@ class ScannerActivity : AppCompatActivity() {
         // Caméra sous la barre d'état : on décale les puces et la feuille des insets système.
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val chipsTop = binding.storeScroll.paddingTop
-        val sheetBottom = binding.sheet.paddingBottom
+        val sheetBottom = binding.sheetContent.paddingBottom
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             binding.storeScroll.updatePadding(top = chipsTop + bars.top)
-            binding.sheet.updatePadding(bottom = sheetBottom + bars.bottom)
+            binding.sheetContent.updatePadding(bottom = sheetBottom + bars.bottom)
             insets
         }
+        sheet = BottomSheetBehavior.from(binding.sheet)
+        sheet.isFitToContents = true
+        sheet.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
+            override fun onStateChanged(bottomSheet: View, newState: Int) {
+                // L'indice disparaît dès que la feuille a été tirée une fois.
+                if (newState == BottomSheetBehavior.STATE_EXPANDED) binding.result.tvSwipeHint.visibility = View.GONE
+            }
+            override fun onSlide(bottomSheet: View, slideOffset: Float) = Unit
+        })
 
         setupStoreChips()
         setupModes()
+        collapseTo(binding.tvWaiting)
         lifecycleScope.launch {
             goal = runCatching { ApiClient.get(this@ScannerActivity).getProfile().goal }.getOrNull()
         }
@@ -146,6 +158,23 @@ class ScannerActivity : AppCompatActivity() {
         binding.btnOcrAgain.setOnClickListener { resetSheet() }
     }
 
+    /**
+     * Hauteur repliée = jusqu'au bas de la vue donnée (rangée du score, formulaire ou attente),
+     * pour que le reste se découvre en tirant vers le haut.
+     */
+    private fun collapseTo(anchor: View) {
+        binding.sheet.post {
+            var y = anchor.bottom
+            var v = anchor.parent as View
+            while (v !== binding.sheetContent) {
+                y += v.top
+                v = v.parent as View
+            }
+            sheet.setPeekHeight(y + binding.sheetContent.paddingBottom, true)
+            sheet.state = BottomSheetBehavior.STATE_COLLAPSED
+        }
+    }
+
     /** Retour à l'état d'attente du mode courant ; relance l'analyse. */
     private fun resetSheet() {
         binding.result.root.visibility = View.GONE
@@ -158,6 +187,7 @@ class ScannerActivity : AppCompatActivity() {
         candidate = null
         lastScanned = null
         isBusy = false
+        collapseTo(binding.tvWaiting)
     }
 
     private fun startCamera() {
@@ -270,6 +300,7 @@ class ScannerActivity : AppCompatActivity() {
             fieldFiber.setText(Fmt.field(parse.fiber))
             fieldSalt.setText(Fmt.field(parse.salt))
         }
+        collapseTo(binding.ocrForm.root)
     }
 
     private fun submitOcr() {
@@ -313,6 +344,8 @@ class ScannerActivity : AppCompatActivity() {
         renderer.render(score, goal)
         // En OCR l'analyse reste en pause (isBusy) jusqu'à « Rescanner » : la carte reste lisible.
         binding.btnOcrAgain.visibility = if (mode == Mode.OCR) View.VISIBLE else View.GONE
+        binding.result.tvSwipeHint.visibility = View.VISIBLE
+        collapseTo(binding.result.tvSwipeHint)
     }
 
     private fun showFailure(e: Throwable) {
@@ -323,6 +356,7 @@ class ScannerActivity : AppCompatActivity() {
             401 -> getString(R.string.scanner_unauthorized)
             else -> getString(R.string.scanner_error, e.message)
         }
+        collapseTo(binding.tvWaiting)
     }
 
     override fun onDestroy() {

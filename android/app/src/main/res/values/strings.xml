@@ -161,4 +161,15 @@
     <string name="reco_error">Serveur injoignable.</string>
     <string name="reco_meta">%1$s kcal · %2$s g prot. / 100 g</string>
     <string name="reco_pick">Choisis une famille pour commencer.</string>
+
+    <!-- Repas conseillé -->
+    <string name="meal_title">Pour un repas</string>
+    <string name="meal_portion">≈ %1$d g</string>
+    <string name="meal_portion_ml">≈ %1$d ml</string>
+    <string name="meal_portion_sub">%1$d kcal · %2$s g de protéines</string>
+    <string name="meal_complement">+ %1$d g de %2$s (%3$d kcal · %4$s g prot.)</string>
+    <string name="meal_extra">+ %1$s</string>
+    <string name="meal_total">Repas ≈ %1$s kcal · %2$d %% de ta journée</string>
+    <string name="meal_targets">Cibles : %1$s kcal / jour · %2$s kcal / semaine · %3$d g de protéines par repas</string>
+    <string name="meal_swipe_hint">Glisse vers le haut pour le repas conseillé et les alternatives</string>
 </resources>

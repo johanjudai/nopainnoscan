@@ -1,7 +1,7 @@
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
-from . import body, models, schemas, scoring, services
+from . import body, meal, models, schemas, scoring, services
 from .auth import current_user
 from .categories import CATEGORY_LABELS
 from .database import engine, get_db
@@ -36,6 +36,7 @@ def _score_response(
         store=store,
         alternatives=alternatives,
         alternatives_scope=scope,
+        meal=meal.suggest(product, user.profile),
         **result,
     )
 
