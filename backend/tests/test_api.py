@@ -100,11 +100,11 @@ def test_unknown_store_is_rejected(client, headers):
 def test_alternatives_only_from_same_store_and_better(client, headers):
     client.post("/scan/manual", params={"store": "lidl"}, json=CHICKEN, headers=headers)
 
-    # Chez Leclerc : le poulet n'a été vu que chez Lidl, donc rien à proposer.
+    # Chez Leclerc : le poulet n'a été vu que chez Lidl, donc repli « vu ailleurs ».
     at_leclerc = client.post(
         "/scan/manual", params={"store": "leclerc"}, json=SAUSAGE, headers=headers
     ).json()
-    assert at_leclerc["alternatives"] == []
+    assert at_leclerc["alternatives_scope"] == "any"
 
     # Chez Lidl : le poulet est proposé, mieux noté.
     at_lidl = client.post(
@@ -112,11 +112,76 @@ def test_alternatives_only_from_same_store_and_better(client, headers):
     ).json()
     names = [alt["name"] for alt in at_lidl["alternatives"]]
     assert names == ["Blanc de poulet"]
+    assert at_lidl["alternatives_scope"] == "store"
     assert at_lidl["alternatives"][0]["score"] > at_lidl["score"]
 
     # Sans enseigne : toutes les alternatives connues, quelle que soit l'enseigne.
     anywhere = client.post("/scan/manual", json=SAUSAGE, headers=headers).json()
     assert [alt["name"] for alt in anywhere["alternatives"]] == ["Blanc de poulet"]
+    assert anywhere["alternatives_scope"] == "any"
+
+
+def test_alternatives_fall_back_to_any_store(client, headers):
+    client.post("/scan/manual", params={"store": "lidl"}, json=CHICKEN, headers=headers)
+    at_leclerc = client.post(
+        "/scan/manual", params={"store": "leclerc"}, json=SAUSAGE, headers=headers
+    ).json()
+    # Rien de connu chez Leclerc : repli sur ce qui a été vu ailleurs, en le disant.
+    assert [alt["name"] for alt in at_leclerc["alternatives"]] == ["Blanc de poulet"]
+    assert at_leclerc["alternatives_scope"] == "any"
+
+
+def test_cold_start_seeds_cache_from_off(client, headers, monkeypatch, db):
+    from app.models import AlternativeSeed, Product, ProductStore
+
+    calls = []
+
+    def fake_search(category, store):
+        calls.append((category, store))
+        return [
+            {
+                "barcode": "111",
+                "name": "Poulet rôti",
+                "category": "Meat",
+                "kcal_100g": 150,
+                "protein_100g": 25,
+                "carbs_100g": 0,
+                "sugars_100g": 0,
+                "fat_100g": 5,
+                "saturated_fat_100g": 1.5,
+                "fiber_100g": 0,
+                "salt_100g": 1,
+                "stores": {"leclerc"},
+            },
+        ]
+
+    monkeypatch.setattr(services, "search_products", fake_search)
+
+    resp = client.post(
+        "/scan/manual", params={"store": "leclerc"}, json=SAUSAGE, headers=headers
+    ).json()
+    assert calls == [("Meat", "leclerc")]
+    assert [alt["name"] for alt in resp["alternatives"]] == ["Poulet rôti"]
+    assert resp["alternatives_scope"] == "store"
+    assert db.query(Product).filter(Product.barcode == "111").one().source == "off"
+    assert db.query(ProductStore).filter_by(store="leclerc").count() == 2  # saucisse + poulet
+    assert db.query(AlternativeSeed).count() == 1
+
+    # Deuxième scan dans la même famille / enseigne : pas de nouvelle recherche OFF.
+    client.post("/scan/manual", params={"store": "leclerc"}, json=SAUSAGE, headers=headers)
+    assert len(calls) == 1
+
+
+def test_product_detail_does_not_record_scan(client, headers):
+    created = client.post("/scan/manual", json=SAUSAGE, headers=headers).json()
+    detail = client.get(
+        f"/products/{created['product_id']}", params={"store": "lidl"}, headers=headers
+    )
+    assert detail.status_code == 200
+    assert detail.json()["product_name"] == "Saucisse"
+    assert detail.json()["store"] == "lidl"
+    assert len(client.get("/scans", headers=headers).json()) == 1
+    assert client.get("/products/9999", headers=headers).status_code == 404
 
 
 def test_barcode_uses_cache_after_first_fetch(client, headers, monkeypatch):
@@ -135,8 +200,7 @@ def test_barcode_uses_cache_after_first_fetch(client, headers, monkeypatch):
     assert calls == ["3017620422003"]
 
 
-def test_barcode_not_found(client, headers, monkeypatch):
-    monkeypatch.setattr(services, "fetch_product_from_off", lambda barcode: None)
+def test_barcode_not_found(client, headers):
     assert client.get("/scan/barcode/00000000", headers=headers).status_code == 404
 
 
@@ -144,28 +208,64 @@ def test_barcode_format_validated(client, headers):
     assert client.get("/scan/barcode/abc", headers=headers).status_code == 422
 
 
-def test_off_client_maps_fields(monkeypatch):
-    class FakeResp:
-        status_code = 200
+class FakeResp:
+    status_code = 200
 
-        @staticmethod
-        def json():
-            return {
-                "status": 1,
-                "product": {
-                    "product_name": "Skyr",
-                    "pnns_groups_2": "Dairy desserts",
-                    "nutriments": {
-                        "energy-kcal_100g": 63,
-                        "proteins_100g": "10.5",
-                        "fat_100g": None,
-                    },
-                },
-            }
+    def __init__(self, payload):
+        self.payload = payload
 
-    monkeypatch.setattr(off_client._client, "get", lambda url: FakeResp())
+    def json(self):
+        return self.payload
+
+
+def test_off_client_maps_fields_and_stores(monkeypatch):
+    payload = {
+        "status": 1,
+        "product": {
+            "product_name": "Skyr",
+            "pnns_groups_2": "Dairy desserts",
+            "stores_tags": ["E.Leclerc", "Carrefour Market", "Magasins U"],
+            "nutriments": {"energy-kcal_100g": 63, "proteins_100g": "10.5", "fat_100g": None},
+        },
+    }
+    monkeypatch.setattr(off_client._client, "get", lambda url, params=None: FakeResp(payload))
     data = off_client.fetch_product_from_off("123")
     assert data["name"] == "Skyr"
     assert data["category"] == "Dairy desserts"
     assert data["protein_100g"] == 10.5
     assert data["fat_100g"] == 0
+    assert data["stores"] == {"leclerc", "carrefour"}
+
+
+def test_off_client_skips_products_without_kcal(monkeypatch):
+    payload = {"status": 1, "product": {"product_name": "Sans kcal", "nutriments": {}}}
+    monkeypatch.setattr(off_client._client, "get", lambda url, params=None: FakeResp(payload))
+    assert off_client.fetch_product_from_off("123") is None
+
+
+def test_off_search_builds_store_query(monkeypatch):
+    seen = {}
+
+    def fake_get(url, params=None):
+        seen.update(params)
+        return FakeResp(
+            {
+                "products": [
+                    {
+                        "code": "42",
+                        "product_name": "Pizza",
+                        "pnns_groups_2": "Pizza pies and quiches",
+                        "stores_tags": [],
+                        "nutriments": {"energy-kcal_100g": 230},
+                    },
+                    {"code": "43", "product_name": "Sans kcal", "nutriments": {}},
+                ]
+            }
+        )
+
+    monkeypatch.setattr(off_client._client, "get", fake_get)
+    results = off_client.search_products("Pizza pies and quiches", "leclerc")
+    assert seen["pnns_groups_2_tags"] == "pizza-pies-and-quiches"
+    assert seen["stores_tags"] == "e-leclerc"
+    assert [r["barcode"] for r in results] == ["42"]
+    assert results[0]["stores"] == {"leclerc"}

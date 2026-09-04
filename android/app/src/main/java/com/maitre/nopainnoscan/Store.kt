@@ -6,7 +6,8 @@ enum class Store(val slug: String, val label: String) {
     LIDL("lidl", "Lidl"),
     GRAND_FRAIS("grand_frais", "Grand Frais"),
     AUCHAN("auchan", "Auchan"),
-    CARREFOUR("carrefour", "Carrefour");
+    CARREFOUR("carrefour", "Carrefour"),
+    THIRIET("thiriet", "Thiriet");
 
     companion object {
         fun fromSlug(slug: String?): Store? = entries.firstOrNull { it.slug == slug }

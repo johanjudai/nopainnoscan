@@ -1,0 +1,77 @@
+from app import services
+
+CHICKEN = {"name": "Blanc de poulet", "category": "Meat", "kcal_100g": 110, "protein_100g": 23}
+SAUSAGE = {
+    "name": "Saucisse",
+    "category": "Meat",
+    "kcal_100g": 320,
+    "protein_100g": 12,
+    "saturated_fat_100g": 11,
+}
+
+
+def test_categories_are_listed_with_french_labels(client):
+    cats = client.get("/categories").json()
+    assert {"slug": "Meat", "label": "Viande"} in cats
+    assert len(cats) > 30
+
+
+def test_thiriet_is_a_known_store(client, headers):
+    stores = client.get("/stores").json()
+    assert {"slug": "thiriet", "label": "Thiriet"} in stores
+    resp = client.post("/scan/manual", params={"store": "thiriet"}, json=CHICKEN, headers=headers)
+    assert resp.status_code == 200
+
+
+def test_recommendations_ranked_for_goal_and_store(client, headers):
+    client.post("/scan/manual", params={"store": "lidl"}, json=SAUSAGE, headers=headers)
+    client.post("/scan/manual", params={"store": "lidl"}, json=CHICKEN, headers=headers)
+
+    resp = client.get(
+        "/recommendations", params={"category": "Meat", "store": "lidl"}, headers=headers
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["scope"] == "store"
+    assert [i["name"] for i in body["items"]] == ["Blanc de poulet", "Saucisse"]
+    assert body["items"][0]["score"] > body["items"][1]["score"]
+    assert body["items"][0]["kcal_100g"] == 110
+
+
+def test_recommendations_fall_back_to_any_store_and_seed_off(client, headers, monkeypatch):
+    calls = []
+
+    def fake_search(category, store):
+        calls.append((category, store))
+        return [
+            {
+                "barcode": "555",
+                "name": "Filet de dinde",
+                "category": "Meat",
+                "kcal_100g": 105,
+                "protein_100g": 24,
+                "carbs_100g": 0,
+                "sugars_100g": 0,
+                "fat_100g": 1,
+                "saturated_fat_100g": 0.3,
+                "fiber_100g": 0,
+                "salt_100g": 0.2,
+                "stores": set(),
+            },
+        ]
+
+    monkeypatch.setattr(services, "search_products", fake_search)
+    body = client.get(
+        "/recommendations", params={"category": "Meat", "store": "thiriet"}, headers=headers
+    ).json()
+    assert calls == [("Meat", "thiriet")]
+    # Rien de connu chez Thiriet : repli sur tout le cache, qui contient le produit importé.
+    assert body["scope"] == "any"
+    assert [i["name"] for i in body["items"]] == ["Filet de dinde"]
+
+
+def test_recommendations_reject_unknown_category(client, headers):
+    assert (
+        client.get("/recommendations", params={"category": "Yolo"}, headers=headers).status_code
+        == 422
+    )

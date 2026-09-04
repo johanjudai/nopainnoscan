@@ -75,17 +75,25 @@ Toutes les routes sauf `/health` exigent le header `X-Api-Key`.
 | ------- | ---------------------------------- | ----------------------------------------------------------------- |
 | GET     | `/health`                          | Liveness (public)                                                 |
 | GET     | `/me`                              | Utilisateur associé à la clé                                      |
-| GET     | `/stores`                          | Enseignes connues (`leclerc`, `lidl`, `grand_frais`, `auchan`, `carrefour`) |
+| GET     | `/stores`                          | Enseignes connues (`leclerc`, `lidl`, `grand_frais`, `auchan`, `carrefour`, `thiriet`) |
+| GET     | `/categories`                      | Familles de produits Open Food Facts avec libellé français        |
+| GET     | `/recommendations?category=&store=`| Meilleurs produits d'une famille pour ton profil, enseigne si possible |
 | GET     | `/profile` · PUT `/profile`        | Profil de l'utilisateur courant, avec `estimate` (dérivés)        |
 | POST    | `/profile/estimate`                | Aperçu des dérivés pour un profil non enregistré (saisie live)    |
 | GET     | `/scan/barcode/{code}?store=`      | Cache → Open Food Facts → score + alternatives, historise le scan |
 | POST    | `/scan/manual?store=`              | Score depuis des valeurs / 100 g (OCR ou saisie)                  |
 | GET     | `/scans?limit=`                    | Historique de l'utilisateur                                       |
+| GET     | `/products/{id}?store=`            | Fiche d'un produit connu : score actuel + alternatives, sans scan |
 
-Un scan avec `store=` marque le produit comme « vu dans cette enseigne » : c'est
-ce qui alimente les alternatives. Une alternative = même famille Open Food Facts
-(`pnns_groups_2`), mieux notée **pour ton profil**, vue dans l'enseigne indiquée
-(ou n'importe où si aucune enseigne).
+Un scan avec `store=` marque le produit comme « vu dans cette enseigne ». Une
+alternative = même famille Open Food Facts (`pnns_groups_2`), mieux notée **pour
+ton profil**, vue dans l'enseigne indiquée ; s'il n'y en a aucune, repli sur
+toutes les enseignes (`alternatives_scope: "any"`).
+
+Pour ne pas partir d'un cache vide, le serveur amorce chaque famille au premier
+besoin : il importe depuis Open Food Facts les produits populaires de la famille
+(filtrés sur l'enseigne quand elle est connue d'OFF), avec leurs enseignes
+(`stores_tags`), au plus une fois par semaine par couple famille / enseigne.
 
 ### Profil : on saisit des mesures, le serveur déduit le reste
 
@@ -145,6 +153,13 @@ dans le canvas Claude Design lié au projet.
 - **Profil** : sexe et objectif en contrôles segmentés, activité en menu, mensurations ;
   la masse grasse et les cibles s'affichent au fil de la saisie via `POST /profile/estimate`
   (débounce 350 ms), avec un message d'info ou d'alerte si une cible est modifiée à la main.
+- **Scanner, mode « Tableau nutritionnel »** : OCR live (ML Kit Text Recognition) pour les
+  produits sans code-barres. Les lignes reconnues sont regroupées par rangée, la première
+  valeur après chaque libellé (colonne « pour 100 g ») est retenue ; deux lectures stables
+  d'affilée ouvrent un formulaire de vérification avant `POST /scan/manual`.
+- **Fiche produit** : depuis l'historique ou une alternative, note actuelle et alternatives.
+- **Recommandations** : famille de produit, enseigne facultative, liste classée des meilleurs
+  produits pour ton objectif.
 - **Réglages** : URL de l'API, clé, test de connexion.
 
 Sécurité côté app : clé API en stockage privé (`allowBackup=false`), un seul
@@ -166,9 +181,8 @@ passes en TLS via ton reverse proxy.
 
 ## Roadmap
 
-- [ ] OCR live (ML Kit Text Recognition) en fallback quand aucun code-barres n'est
-      détecté : parsing du tableau nutritionnel → `POST /scan/manual`.
-- [ ] Écran historique (`GET /scans`).
+- [ ] Catégorie facultative sur les produits saisis par OCR (pour qu'ils aient des alternatives).
+- [ ] Écran historique complet (`GET /scans`, au-delà des 5 derniers).
 - [ ] Migrations (Alembic) dès que le schéma bouge.
 - [ ] Import complet Open Food Facts pour du 100 % offline dès le premier scan.
 

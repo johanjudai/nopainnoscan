@@ -19,7 +19,7 @@ import java.util.Locale
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val adapter = ScanAdapter()
+    private val adapter = ScanAdapter { ProductActivity.open(this, it.product_id) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity() {
         binding.tileProfile.setOnClickListener { open(ProfileActivity::class.java) }
         binding.tileTargets.setOnClickListener { open(ProfileActivity::class.java) }
         binding.btnSettings.setOnClickListener { open(SettingsActivity::class.java) }
+        binding.cardReco.setOnClickListener { open(RecommendationsActivity::class.java) }
     }
 
     override fun onResume() {

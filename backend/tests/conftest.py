@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app import database, models
+from app import database, models, services
 from app.auth import hash_key
 from app.main import app
 
@@ -17,6 +17,13 @@ _engine = create_engine(
     "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
 )
 _Session = sessionmaker(bind=_engine, autoflush=False)
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """Jamais d'appel Open Food Facts réel dans les tests."""
+    monkeypatch.setattr(services, "fetch_product_from_off", lambda barcode: None)
+    monkeypatch.setattr(services, "search_products", lambda category, store: [])
 
 
 @pytest.fixture(autouse=True)
