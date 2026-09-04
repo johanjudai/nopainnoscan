@@ -6,6 +6,7 @@ SAUSAGE = {
     "category": "Meat",
     "kcal_100g": 320,
     "protein_100g": 12,
+    "fat_100g": 28,
     "saturated_fat_100g": 11,
 }
 
@@ -444,6 +445,21 @@ def test_manual_values_are_bounded(client, headers):
     ):
         resp = client.post("/scan/manual", json={**CHICKEN, **bad}, headers=headers)
         assert resp.status_code == 422, bad
+
+
+def test_manual_values_must_be_physically_possible(client, headers):
+    """Virgule perdue à l'OCR (8,5 → 85) : le serveur est la dernière barrière."""
+    base = {**CHICKEN, "carbs_100g": 24, "fat_100g": 9.5}
+    for bad in (
+        {"sugars_100g": 85},
+        {"saturated_fat_100g": 32},
+        {"protein_100g": 60, "carbs_100g": 60},
+    ):
+        resp = client.post("/scan/manual", json={**base, **bad}, headers=headers)
+        assert resp.status_code == 422, bad
+    # Arrondis d'étiquette tolérés : sucres 4,1 pour glucides 4.
+    ok = {**CHICKEN, "carbs_100g": 4, "sugars_100g": 4.1}
+    assert client.post("/scan/manual", json=ok, headers=headers).status_code == 200
 
 
 def test_unicode_digits_are_not_a_barcode(client, headers):

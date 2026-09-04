@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .categories import CATEGORY_LABELS
 
@@ -89,6 +89,20 @@ class NutrientsIn(BaseModel):
         if value is not None and value not in CATEGORY_LABELS:
             raise ValueError("famille inconnue : voir GET /categories")
         return value
+
+    @model_validator(mode="after")
+    def _physically_possible(self) -> "NutrientsIn":
+        """Une virgule perdue à l'OCR (8,5 → 85) ne doit pas finir en base ; tolérance d'arrondi."""
+        if self.sugars_100g > self.carbs_100g + max(0.1, self.carbs_100g * 0.05):
+            raise ValueError("sucres supérieurs aux glucides")
+        if self.saturated_fat_100g > self.fat_100g + max(0.1, self.fat_100g * 0.05):
+            raise ValueError("acides gras saturés supérieurs aux lipides")
+        total = (
+            self.protein_100g + self.carbs_100g + self.fat_100g + self.fiber_100g + self.salt_100g
+        )
+        if total > 101:
+            raise ValueError("plus de 100 g de nutriments pour 100 g")
+        return self
 
 
 class AlternativeOut(BaseModel):

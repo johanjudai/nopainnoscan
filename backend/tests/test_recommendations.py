@@ -6,6 +6,7 @@ SAUSAGE = {
     "category": "Meat",
     "kcal_100g": 320,
     "protein_100g": 12,
+    "fat_100g": 28,
     "saturated_fat_100g": 11,
 }
 

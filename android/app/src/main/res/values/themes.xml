@@ -37,6 +37,17 @@
         <item name="android:navigationBarColor">@color/bg</item>
     </style>
 
+    <!-- Photo plein écran : fond encre, barres sombres. -->
+    <style name="Theme.NoPainNoScan.Photo">
+        <item name="android:windowBackground">@color/ink</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:statusBarColor">@color/ink</item>
+        <item name="android:navigationBarColor">@color/ink</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
     <!-- Texte -->
     <style name="Text.Display" parent="TextAppearance.Material3.HeadlineMedium">
         <item name="android:fontFamily">@font/sora</item>

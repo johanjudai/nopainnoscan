@@ -2,6 +2,7 @@ package com.maitre.nopainnoscan
 
 import android.os.Bundle
 import android.view.View
+import android.widget.AutoCompleteTextView
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -131,10 +132,17 @@ class ProfileActivity : AppCompatActivity() {
         )
     }
 
+    /** `filter = false` sur le menu déroulant : sinon la liste ne montre plus que l'entrée courante. */
     private fun setQuiet(field: EditText, value: String) {
         programmatic = true
-        field.setText(value)
+        if (field is AutoCompleteTextView) field.setText(value, false) else field.setText(value)
         programmatic = false
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        // Le texte restauré a filtré la liste : on la remet complète.
+        binding.fieldActivity.setSimpleItems(activityLabels)
     }
 
     private fun updateHipsVisibility() {

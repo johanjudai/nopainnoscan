@@ -9,6 +9,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.maitre.nopainnoscan.api.ApiClient
 import com.maitre.nopainnoscan.databinding.ActivitySettingsBinding
+import com.maitre.nopainnoscan.update.UpdatePrompt
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
@@ -25,6 +26,10 @@ class SettingsActivity : AppCompatActivity() {
 
         binding.fieldApiUrl.setText(prefs.apiBaseUrl)
         binding.fieldApiKey.setText(prefs.apiKey)
+
+        binding.tvVersion.text = getString(R.string.settings_version, BuildConfig.VERSION_NAME)
+        val updates = UpdatePrompt(this)
+        binding.btnCheckUpdate.setOnClickListener { updates.checkNow() }
 
         binding.btnSave.setOnClickListener {
             if (save()) {
