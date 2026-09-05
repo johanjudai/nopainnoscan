@@ -167,6 +167,8 @@ dans le canvas Claude Design lié au projet.
   avec anneau de score, catégorie, détail bonus / malus et alternatives mieux notées dans l'enseigne.
   Le scan est **live** : CameraX pousse chaque frame (720p) à ML Kit on-device, un code doit
   être lu sur 2 frames consécutives avant d'interroger l'API.
+  Un appui sur l'aperçu force la mise au point et l'exposition à cet endroit (repère animé),
+  puis l'autofocus continu reprend après 4 s.
 - **Profil** : sexe et objectif en contrôles segmentés, activité en menu (de « pas de sport »
   à « athlète », facteurs 1,2 → 1,9), mensurations ;
   la masse grasse et les cibles s'affichent au fil de la saisie via `POST /profile/estimate`

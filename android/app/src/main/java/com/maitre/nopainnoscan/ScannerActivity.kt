@@ -1,18 +1,22 @@
 package com.maitre.nopainnoscan
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Size
+import android.view.MotionEvent
 import android.view.View
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
@@ -53,6 +57,7 @@ import kotlinx.coroutines.launch
 import retrofit2.HttpException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Scan live sans photo : CameraX pousse chaque frame à ML Kit sur un thread dédié.
@@ -67,6 +72,7 @@ class ScannerActivity : AppCompatActivity() {
     private lateinit var prefs: AppPrefs
     private lateinit var renderer: ResultRenderer
     private lateinit var cameraExecutor: ExecutorService
+    private var camera: Camera? = null
     private lateinit var sheet: BottomSheetBehavior<View>
 
     private val barcodeScanner = BarcodeScanning.getClient(
@@ -237,8 +243,48 @@ class ScannerActivity : AppCompatActivity() {
                 .also { it.setAnalyzer(cameraExecutor, ::analyzeFrame) }
 
             provider.unbindAll()
-            provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+            camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+            setupTapToFocus()
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    /**
+     * L'autofocus continu hésite sur un code-barres ou une étiquette brillante : un appui sur
+     * l'aperçu force la mise au point et l'exposition à cet endroit, puis l'AF continu reprend.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupTapToFocus() {
+        binding.previewView.setOnTouchListener { view, event ->
+            if (event.actionMasked == MotionEvent.ACTION_UP) {
+                focusAt(event.x, event.y)
+                view.performClick()
+            }
+            true
+        }
+    }
+
+    private fun focusAt(x: Float, y: Float) {
+        val control = camera?.cameraControl ?: return
+        val point = binding.previewView.meteringPointFactory.createPoint(x, y)
+        val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
+            .setAutoCancelDuration(FOCUS_HOLD_S, TimeUnit.SECONDS)
+            .build()
+        control.startFocusAndMetering(action)
+        showFocusRing(x, y)
+    }
+
+    private fun showFocusRing(x: Float, y: Float) {
+        val ring = binding.focusRing
+        ring.animate().cancel()
+        ring.translationX = x - ring.width / 2f
+        ring.translationY = y - ring.height / 2f
+        ring.alpha = 1f
+        ring.scaleX = 1.3f
+        ring.scaleY = 1.3f
+        ring.visibility = View.VISIBLE
+        ring.animate().scaleX(1f).scaleY(1f).setDuration(150).withEndAction {
+            ring.animate().alpha(0f).setStartDelay(500).setDuration(250).withEndAction { ring.visibility = View.INVISIBLE }
+        }
     }
 
     @ExperimentalGetImage
@@ -449,6 +495,7 @@ class ScannerActivity : AppCompatActivity() {
     companion object {
         private const val RESCAN_DELAY_MS = 3000L
         private const val CONFIRM_FRAMES = 2
+        private const val FOCUS_HOLD_S = 4L
         private const val EXTRA_MANUAL = "manual"
         private val FIELD_LABELS = mapOf(
             NutrientField.KCAL to R.string.ocr_kcal,
