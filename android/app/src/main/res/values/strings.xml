@@ -25,7 +25,7 @@
     <string name="main_scan_meta">%1$s · %2$s</string>
 
     <!-- Scanner -->
-    <string name="scanner_hint">Vise le code-barres</string>
+    <string name="scanner_hint">Vise le code-barres · touche l\'écran pour la mise au point</string>
     <string name="scanner_waiting">Pointe la caméra vers un code-barres, la note s\'affiche ici.</string>
     <string name="scanner_loading">Analyse de %1$s…</string>
     <string name="scanner_for_goal">Pour ta %1$s</string>
@@ -129,7 +129,7 @@
     <!-- OCR -->
     <string name="mode_barcode">Code-barres</string>
     <string name="mode_ocr">Tableau nutritionnel</string>
-    <string name="ocr_hint">Cadre le tableau des valeurs nutritionnelles</string>
+    <string name="ocr_hint">Cadre le tableau · touche l\'écran pour la mise au point</string>
     <string name="ocr_waiting">Tiens le téléphone stable, la colonne « pour 100 g » bien visible. Les valeurs se remplissent toutes seules.</string>
     <string name="ocr_review_title">Vérifie les valeurs lues</string>
     <string name="ocr_review_sub">Pour 100 g. Corrige ce qui a mal été lu, puis note le produit.</string>
