@@ -2,14 +2,18 @@ package com.maitre.nopainnoscan
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.maitre.nopainnoscan.api.ApiClient
 import com.maitre.nopainnoscan.api.ProfileOutDto
+import com.maitre.nopainnoscan.api.ScanDto
 import com.maitre.nopainnoscan.databinding.ActivityMainBinding
 import com.maitre.nopainnoscan.update.UpdatePrompt
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -38,6 +42,37 @@ class MainActivity : AppCompatActivity() {
         binding.tileTargets.setOnClickListener { open(ProfileActivity::class.java) }
         binding.btnSettings.setOnClickListener { open(SettingsActivity::class.java) }
         binding.cardReco.setOnClickListener { open(RecommendationsActivity::class.java) }
+        binding.btnMoreHistory.setOnClickListener { loadMoreHistory() }
+    }
+
+    // Historique : 5 au départ, puis par paliers jusqu'au maximum servi par l'API.
+    private var historyLimit = HISTORY_STEPS.first()
+    private var historyJob: Job? = null
+
+    /** Palier suivant, historique seul ; en échec la liste reste et le palier n'avance pas. */
+    private fun loadMoreHistory() {
+        val next = HISTORY_STEPS.firstOrNull { it > historyLimit } ?: return
+        binding.btnMoreHistory.isEnabled = false
+        historyJob?.cancel()
+        historyJob = lifecycleScope.launch {
+            val api = runCatching { ApiClient.get(this@MainActivity) }.getOrNull()
+            val scans = api?.let { runCatching { it.history(next) }.getOrNull() }
+            binding.btnMoreHistory.isEnabled = true
+            if (scans == null) {
+                Toast.makeText(this@MainActivity, R.string.error_offline, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            historyLimit = next
+            renderHistory(scans)
+        }
+    }
+
+    private fun renderHistory(scans: List<ScanDto>?) {
+        adapter.submitList(scans.orEmpty())
+        binding.tvEmpty.visibility = if (scans.isNullOrEmpty()) View.VISIBLE else View.GONE
+        // Une page pleine laisse supposer une suite ; une page courte ou le plafond ferme le bouton.
+        val more = (scans?.size ?: 0) >= historyLimit && historyLimit < HISTORY_STEPS.last()
+        binding.btnMoreHistory.visibility = if (more) View.VISIBLE else View.GONE
     }
 
     override fun onResume() {
@@ -66,7 +101,7 @@ class MainActivity : AppCompatActivity() {
         val (me, profile, scans) = coroutineScope {
             val me = async { runCatching { api.me() }.getOrNull() }
             val profile = async { runCatching { api.getProfile() }.getOrNull() }
-            val scans = async { runCatching { api.history(5) }.getOrNull() }
+            val scans = async { runCatching { api.history(historyLimit) }.getOrNull() }
             Triple(me.await(), profile.await(), scans.await())
         }
 
@@ -77,8 +112,7 @@ class MainActivity : AppCompatActivity() {
         renderDate(profile?.goal)
         renderTiles(profile)
 
-        adapter.submitList(scans.orEmpty())
-        binding.tvEmpty.visibility = if (scans.isNullOrEmpty()) android.view.View.VISIBLE else android.view.View.GONE
+        renderHistory(scans)
     }
 
     private fun renderDate(goal: String?) {
@@ -118,4 +152,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun open(activity: Class<out AppCompatActivity>) = startActivity(Intent(this, activity))
+
+    private companion object {
+        val HISTORY_STEPS = listOf(5, 25, 100, 200)
+    }
 }

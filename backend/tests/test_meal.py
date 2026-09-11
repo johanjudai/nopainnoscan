@@ -102,3 +102,46 @@ def test_scan_response_includes_meal_when_profile_exists(client, headers):
     m = resp.json()["meal"]
     assert m["role"] == "carb"
     assert m["complement"]["protein_g"] > 0
+
+
+def test_custom_portion_rescales_values_and_complement():
+    potatoes = product(category="Potatoes", kcal_100g=85, protein_100g=2, carbs_100g=18)
+    default = meal.suggest(potatoes, PROFILE)
+    custom = meal.suggest(potatoes, PROFILE, portion_g=150)
+    assert custom["portion_g"] == 150
+    assert custom["portion_kcal"] == 128  # 85 × 1,5
+    assert custom["portion_carbs_g"] == 27.0
+    # Moins de féculent -> plus de protéine à trouver et plus de kcal disponibles.
+    assert custom["complement"]["grams"] >= default["complement"]["grams"]
+    assert custom["meal_kcal"] <= custom["meal_kcal_budget"]
+
+
+def test_meal_endpoint_needs_profile_then_uses_portion(client, headers):
+    created = client.post(
+        "/scan/manual",
+        json={"name": "Riz", "category": "Cereals", "kcal_100g": 130, "protein_100g": 2.7},
+        headers=headers,
+    ).json()
+    url = f"/products/{created['product_id']}/meal"
+    assert client.get(url, params={"portion_g": 200}, headers=headers).status_code == 404
+    client.put(
+        "/profile",
+        json={"sex": "male", "age": 30, "weight_kg": 78, "height_cm": 180, "goal": "cut"},
+        headers=headers,
+    )
+    m = client.get(url, params={"portion_g": 200}, headers=headers).json()
+    assert m["portion_g"] == 200
+    assert m["portion_kcal"] == 260
+    assert client.get(url, params={"portion_g": 0}, headers=headers).status_code == 422
+    assert (
+        client.get("/products/9999/meal", params={"portion_g": 100}, headers=headers).status_code
+        == 404
+    )
+
+
+def test_oversized_mixed_portion_gets_no_top_up_and_an_honest_note():
+    dish = product(category="One-dish meals", kcal_100g=250, protein_100g=8, carbs_100g=25)
+    m = meal.suggest(dish, PROFILE, portion_g=600)
+    assert m["portion_kcal"] == 1500
+    assert m["complement"] is None
+    assert "dépasse" in m["note"]

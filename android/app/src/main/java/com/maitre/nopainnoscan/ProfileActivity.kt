@@ -172,6 +172,9 @@ class ProfileActivity : AppCompatActivity() {
                 }
             )
             fieldActivity.setText(activityLabels.getOrElse(activityValues.indexOf(profile.activity)) { activityLabels[2] }, false)
+            // Cibles surchargées : render() ne les touche pas, il faut afficher la valeur enregistrée ici.
+            profile.daily_kcal_target?.let { fieldKcal.setText(Fmt.field(it)) }
+            profile.daily_protein_target_g?.let { fieldProtein.setText(Fmt.field(it)) }
         }
         programmatic = false
         kcalOverride = profile.daily_kcal_target != null

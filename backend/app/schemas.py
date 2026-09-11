@@ -127,6 +127,8 @@ class MealOut(BaseModel):
     portion_g: int
     portion_kcal: int
     portion_protein_g: float
+    portion_carbs_g: float = 0
+    portion_fat_g: float = 0
     complement: ComplementOut | None
     extras: list[str]
     meal_kcal: int

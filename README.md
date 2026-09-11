@@ -84,6 +84,7 @@ Toutes les routes sauf `/health` exigent le header `X-Api-Key`.
 | POST    | `/scan/manual?store=`              | Score depuis des valeurs / 100 g (OCR ou saisie)                  |
 | GET     | `/scans?limit=`                    | Historique de l'utilisateur                                       |
 | GET     | `/products/{id}?store=`            | Fiche d'un produit connu : score actuel + alternatives, sans scan |
+| GET     | `/products/{id}/meal?portion_g=`   | Repas recalculé pour une quantité choisie (portion + complément)  |
 
 Un scan avec `store=` marque le produit comme « vu dans cette enseigne ». Une
 alternative = même famille Open Food Facts (`pnns_groups_2`), mieux notée **pour
@@ -189,7 +190,11 @@ dans le canvas Claude Design lié au projet.
   elle révèle le repas conseillé (portion + complément) puis les alternatives.
 - **Fiche produit** : depuis l'historique ou une alternative, note actuelle, repas conseillé
   et alternatives. Un appui sur la photo l'ouvre en plein écran, zoomable (pleine
-  résolution Open Food Facts, repli sur la vignette).
+  résolution Open Food Facts, repli sur la vignette). La quantité du repas est modifiable :
+  `GET /products/{id}/meal?portion_g=` recalcule kcal, protéines, glucides, lipides de la
+  portion et redimensionne le complément pour boucler le repas.
+- **Accueil** : les 5 derniers scans, puis « Voir plus d'anciens scans » par paliers
+  (25, 100, 200).
 - **Recommandations** : famille de produit, enseigne facultative, liste classée des meilleurs
   produits pour ton objectif.
 - **Réglages** : URL de l'API, clé, test de connexion, version installée et vérification

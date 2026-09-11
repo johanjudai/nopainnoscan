@@ -28,7 +28,12 @@ class ProductActivity : AppCompatActivity() {
         binding.tvContext.text = store?.let { getString(R.string.product_context_store, it.label) }
             ?: getString(R.string.product_context_any)
 
-        val renderer = ResultRenderer(this, binding.result, layoutInflater) { open(this, it) }
+        val renderer = ResultRenderer(
+            this, binding.result, layoutInflater,
+            onAlternativeClick = { open(this, it) },
+            scope = lifecycleScope,
+            mealLoader = { id, grams -> ApiClient.get(this).meal(id, grams) },
+        )
         binding.result.root.visibility = View.INVISIBLE
 
         lifecycleScope.launch {

@@ -180,6 +180,23 @@ def product_detail(
     return _score_response(db, user, product, store, record=False)
 
 
+@app.get("/products/{product_id}/meal", response_model=schemas.MealOut)
+def product_meal(
+    product_id: int,
+    portion_g: int = Query(ge=1, le=2000),
+    user: models.User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """Repas recalculé pour une quantité choisie : valeurs de la portion et complément ajusté."""
+    product = db.get(models.Product, product_id)
+    if not product:
+        raise HTTPException(404, "Produit inconnu.")
+    suggestion = meal.suggest(product, user.profile, portion_g=portion_g)
+    if suggestion is None:
+        raise HTTPException(404, "Profil requis pour dimensionner un repas.")
+    return suggestion
+
+
 @app.get("/scans", response_model=list[schemas.ScanOut])
 def scan_history(
     limit: int = Query(default=50, ge=1, le=200),

@@ -79,8 +79,8 @@ def classify(product) -> str:
     return "mixed"
 
 
-def suggest(product, profile) -> dict | None:
-    """None sans profil : impossible de dimensionner un repas."""
+def suggest(product, profile, portion_g: int | None = None) -> dict | None:
+    """None sans profil : impossible de dimensionner un repas. `portion_g` force la quantité."""
     if profile is None:
         return None
     est = estimate(profile)
@@ -88,55 +88,8 @@ def suggest(product, profile) -> dict | None:
     meal_kcal = est["kcal_target"] / MEALS_PER_DAY
     meal_protein = est["protein_target_g"] / MEALS_PER_DAY
     role = classify(product)
-
-    complement = None
-    extras: list[str] = []
-    note = ""
-
-    if role == "carb":
-        grams = _grams_for_kcal(product, meal_kcal * CARB_SHARE.get(goal, 0.45), cap=400)
-        complement = _protein_complement(
-            goal, meal_protein - _protein(product, grams), meal_kcal - _kcal(product, grams)
-        )
-        extras.append(GREENS)
-        note = "Féculent : il cale le repas, la protéine vient du complément."
-    elif role == "protein":
-        grams = _grams_for_protein(product, meal_protein, cap=300, kcal_cap=meal_kcal * 0.7)
-        key = CARB_COMPLEMENT_BY_GOAL.get(goal, "rice")
-        complement = _complement(key, kcal_left=meal_kcal - _kcal(product, grams), cap=350)
-        extras.append(GREENS)
-        note = "Protéines : la portion couvre ta cible du repas, le féculent apporte l'énergie."
-    elif role == "mixed":
-        grams = _grams_for_kcal(product, meal_kcal, cap=450)
-        gap = meal_protein - _protein(product, grams)
-        if gap > 8:
-            complement = _protein_complement(
-                goal, gap, kcal_left=max(meal_kcal * 0.15, 80), prefer="skyr"
-            )
-        extras.append("Salade verte ou crudités")
-        note = "Plat complet : la portion tient dans ton budget du repas."
-    elif role == "veg":
-        grams = 250
-        complement = _protein_complement(
-            goal, meal_protein, kcal_left=meal_kcal - _kcal(product, grams)
-        )
-        note = "Légume : à volonté, c'est le complément qui fait le repas."
-    elif role == "fruit":
-        grams = 150
-        note = "Un fruit : en dessert ou en collation, pas un repas."
-    elif role == "fat":
-        grams = 15
-        note = "Matière grasse : une cuillère à soupe suffit, à compter dans le repas."
-    elif role == "drink":
-        grams = 250
-        note = "Boisson : un verre. Ne remplace pas un repas."
-    else:  # treat
-        grams = _grams_for_kcal(product, meal_kcal * 0.15, cap=50, step=5)
-        note = (
-            "Plaisir : une petite part en dessert, pas un repas."
-            if goal != "cut"
-            else "Plaisir : garde-le pour un jour sans déficit, ou une part symbolique."
-        )
+    grams = portion_g or _default_grams(role, product, goal, meal_kcal, meal_protein)
+    complement, extras, note = _complete(role, product, goal, grams, meal_kcal, meal_protein)
 
     portion_kcal = _kcal(product, grams)
     portion_protein = _protein(product, grams)
@@ -147,6 +100,8 @@ def suggest(product, profile) -> dict | None:
         "portion_g": grams,
         "portion_kcal": round(portion_kcal),
         "portion_protein_g": round(portion_protein, 1),
+        "portion_carbs_g": round(product.carbs_100g * grams / 100, 1),
+        "portion_fat_g": round(product.fat_100g * grams / 100, 1),
         "complement": complement,
         "extras": extras,
         "meal_kcal": round(total_kcal),
@@ -158,6 +113,69 @@ def suggest(product, profile) -> dict | None:
         "weekly_kcal_target": est["kcal_target"] * 7,
         "note": note,
     }
+
+
+def _default_grams(role: str, product, goal: str, meal_kcal: float, meal_protein: float) -> int:
+    if role == "carb":
+        return _grams_for_kcal(product, meal_kcal * CARB_SHARE.get(goal, 0.45), cap=400)
+    if role == "protein":
+        return _grams_for_protein(product, meal_protein, cap=300, kcal_cap=meal_kcal * 0.7)
+    if role == "mixed":
+        return _grams_for_kcal(product, meal_kcal, cap=450)
+    if role == "treat":
+        return _grams_for_kcal(product, meal_kcal * 0.15, cap=50, step=5)
+    return {"veg": 250, "fruit": 150, "fat": 15, "drink": 250}[role]
+
+
+def _complete(
+    role: str, product, goal: str, grams: int, meal_kcal: float, meal_protein: float
+) -> tuple[dict | None, list[str], str]:
+    """Complément, accompagnements et note pour une quantité donnée du produit."""
+    kcal_left = meal_kcal - _kcal(product, grams)
+    protein_gap = meal_protein - _protein(product, grams)
+    if role == "carb":
+        return (
+            _protein_complement(goal, protein_gap, kcal_left),
+            [GREENS],
+            "Féculent : il cale le repas, la protéine vient du complément.",
+        )
+    if role == "protein":
+        key = CARB_COMPLEMENT_BY_GOAL.get(goal, "rice")
+        return (
+            _complement(key, kcal_left=kcal_left, cap=350),
+            [GREENS],
+            "Protéines : la portion couvre ta cible du repas, le féculent apporte l'énergie.",
+        )
+    if role == "mixed":
+        # Petit appoint protéiné (15 % du repas), seulement si la portion tient dans le budget.
+        complement = None
+        if protein_gap > 8 and kcal_left >= 0:
+            top_up = max(meal_kcal * 0.15, 80)
+            complement = _protein_complement(goal, protein_gap, kcal_left=top_up, prefer="skyr")
+        note = (
+            "Plat complet : la portion tient dans ton budget du repas."
+            if kcal_left >= 0
+            else "Plat complet : cette quantité dépasse ton budget du repas."
+        )
+        return complement, ["Salade verte ou crudités"], note
+    if role == "veg":
+        return (
+            _protein_complement(goal, meal_protein, kcal_left=kcal_left),
+            [],
+            "Légume : à volonté, c'est le complément qui fait le repas.",
+        )
+    if role == "fruit":
+        return None, [], "Un fruit : en dessert ou en collation, pas un repas."
+    if role == "fat":
+        return None, [], "Matière grasse : une cuillère à soupe suffit, à compter dans le repas."
+    if role == "drink":
+        return None, [], "Boisson : un verre. Ne remplace pas un repas."
+    note = (
+        "Plaisir : une petite part en dessert, pas un repas."
+        if goal != "cut"
+        else "Plaisir : garde-le pour un jour sans déficit, ou une part symbolique."
+    )
+    return None, [], note
 
 
 # ---------- helpers ----------
