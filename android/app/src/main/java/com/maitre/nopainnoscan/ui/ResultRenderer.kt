@@ -30,6 +30,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 /**
  * Carte de résultat partagée entre le scanner et la fiche produit. Avec [mealLoader], la
@@ -70,9 +71,11 @@ class ResultRenderer(
             runCatching { loader(forProduct, grams) }
                 .onSuccess { if (productId == forProduct) renderMeal(it) }
                 .onFailure {
-                    if (it !is CancellationException) {
-                        Toast.makeText(context, ApiErrors.describe(context, it), Toast.LENGTH_SHORT).show()
-                    }
+                    if (it is CancellationException) return@onFailure
+                    // 404 ici = route absente : le produit, lui, vient d'être affiché par le même serveur.
+                    val text = if ((it as? HttpException)?.code() == 404) context.getString(R.string.meal_server_outdated)
+                    else ApiErrors.describe(context, it)
+                    Toast.makeText(context, text, Toast.LENGTH_LONG).show()
                 }
         }
     }
