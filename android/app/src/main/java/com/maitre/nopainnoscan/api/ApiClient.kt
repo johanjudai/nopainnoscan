@@ -85,6 +85,8 @@ data class MealDto(
     val portion_g: Int,
     val portion_kcal: Int,
     val portion_protein_g: Double,
+    val portion_carbs_g: Double?,
+    val portion_fat_g: Double?,
     val complement: ComplementDto?,
     val extras: List<String>?,
     val meal_kcal: Int,
@@ -175,6 +177,10 @@ interface NoPainNoScanApi {
 
     @GET("products/{id}")
     suspend fun product(@Path("id") id: Int, @Query("store") store: String?): ScoreDto
+
+    /** Repas recalculé pour une quantité choisie (g ou ml). */
+    @GET("products/{id}/meal")
+    suspend fun meal(@Path("id") id: Int, @Query("portion_g") portionG: Int): MealDto
 }
 
 /**

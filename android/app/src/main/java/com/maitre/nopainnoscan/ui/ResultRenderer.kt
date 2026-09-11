@@ -7,9 +7,12 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.view.LayoutInflater
 import android.view.View
+import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.core.widget.doAfterTextChanged
 import coil.load
 import com.google.android.material.chip.Chip
+import com.maitre.nopainnoscan.ApiErrors
 import com.maitre.nopainnoscan.Category
 import com.maitre.nopainnoscan.Fmt
 import com.maitre.nopainnoscan.R
@@ -21,18 +24,66 @@ import com.maitre.nopainnoscan.databinding.ViewResultBinding
 import com.maitre.nopainnoscan.goalLabelLower
 import com.maitre.nopainnoscan.showPill
 import com.maitre.nopainnoscan.showScorePill
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
-/** Carte de résultat partagée entre le scanner et la fiche produit. */
+/**
+ * Carte de résultat partagée entre le scanner et la fiche produit. Avec [mealLoader], la
+ * quantité devient éditable : le repas est rechargé (débounce, une requête en vol) et
+ * n'est affiché que si le produit à l'écran est toujours celui de la requête.
+ */
 class ResultRenderer(
     private val context: Context,
     private val binding: ViewResultBinding,
     private val inflater: LayoutInflater,
     private val onAlternativeClick: ((Int) -> Unit)? = null,
+    private val scope: CoroutineScope? = null,
+    private val mealLoader: (suspend (productId: Int, grams: Int) -> MealDto)? = null,
 ) {
 
+    private var productId = 0
+    private var suggestedPortion = 0
+    private var fillingField = false
+    private var pendingPortion: Runnable? = null
+    private var mealJob: Job? = null
+
+    init {
+        binding.fieldPortion.doAfterTextChanged { text ->
+            if (fillingField) return@doAfterTextChanged
+            val grams = text?.toString()?.toIntOrNull()?.takeIf { it > 0 } ?: return@doAfterTextChanged
+            pendingPortion?.let(binding.fieldPortion::removeCallbacks)
+            pendingPortion = Runnable { reloadMeal(grams.coerceAtMost(MAX_PORTION_G)) }
+                .also { binding.fieldPortion.postDelayed(it, PORTION_DEBOUNCE_MS) }
+        }
+    }
+
+    private fun reloadMeal(grams: Int) {
+        val loader = mealLoader ?: return
+        val scope = scope ?: return
+        val forProduct = productId
+        mealJob?.cancel()
+        mealJob = scope.launch {
+            runCatching { loader(forProduct, grams) }
+                .onSuccess { if (productId == forProduct) renderMeal(it) }
+                .onFailure {
+                    if (it !is CancellationException) {
+                        Toast.makeText(context, ApiErrors.describe(context, it), Toast.LENGTH_SHORT).show()
+                    }
+                }
+        }
+    }
+
     fun render(score: ScoreDto, goal: String?) {
+        // Nouveau produit : rien de ce qui était en attente pour l'ancien ne doit s'afficher sous son nom.
+        pendingPortion?.let(binding.fieldPortion::removeCallbacks)
+        mealJob?.cancel()
+        // Même produit re-scanné pendant que l'utilisateur ajuste la quantité : on garde sa saisie.
+        val keepPortion = score.product_id == productId && customPortion() != null
+        productId = score.product_id
         val category = Category.of(score.category)
         binding.ring.set(score.score, ContextCompat.getColor(context, category.color))
         binding.chipCategory.showPill(context.getString(category.label), category)
@@ -50,17 +101,37 @@ class ResultRenderer(
         else context.getString(R.string.scanner_for_goal, goalText)
 
         renderBreakdown(score.breakdown.orEmpty())
-        renderMeal(score.meal)
+        suggestedPortion = score.meal?.portion_g ?: 0
+        if (!keepPortion) {
+            fillField(suggestedPortion)
+            renderMeal(score.meal)
+        }
+        binding.layoutPortion.visibility = if (score.meal == null || mealLoader == null) View.GONE else View.VISIBLE
         renderAlternatives(score, store)
+    }
+
+    /** Quantité tapée par l'utilisateur, ou null si le champ montre encore la portion conseillée. */
+    private fun customPortion(): Int? =
+        binding.fieldPortion.text?.toString()?.toIntOrNull()?.takeIf { it > 0 && it != suggestedPortion }
+
+    private fun fillField(grams: Int) {
+        fillingField = true
+        binding.fieldPortion.setText(if (grams > 0) grams.toString() else "")
+        fillingField = false
     }
 
     private fun renderMeal(meal: MealDto?) {
         binding.cardMeal.visibility = if (meal == null) View.GONE else View.VISIBLE
         if (meal == null) return
-        val portionRes = if (meal.role == "drink") R.string.meal_portion_ml else R.string.meal_portion
-        binding.tvPortion.text = context.getString(portionRes, meal.portion_g)
+        val custom = meal.portion_g != suggestedPortion
+        val unit = context.getString(if (meal.role == "drink") R.string.unit_ml else R.string.unit_g)
+        binding.layoutPortion.suffixText = unit
+        binding.tvPortion.text = context.getString(
+            if (custom) R.string.meal_portion_custom else R.string.meal_portion, meal.portion_g, unit
+        )
         binding.tvPortionSub.text = context.getString(
-            R.string.meal_portion_sub, meal.portion_kcal, Fmt.dec1(meal.portion_protein_g)
+            R.string.meal_portion_sub, meal.portion_kcal, Fmt.dec1(meal.portion_protein_g),
+            Fmt.dec1(meal.portion_carbs_g ?: 0.0), Fmt.dec1(meal.portion_fat_g ?: 0.0),
         )
 
         val complement = meal.complement
@@ -135,6 +206,8 @@ class ResultRenderer(
         if (v % 1.0 == 0.0 || v >= 10) v.roundToInt().toString() else Fmt.dec1(v)
 
     private companion object {
+        const val PORTION_DEBOUNCE_MS = 400L
+        const val MAX_PORTION_G = 2000 // borne de l'API
         val BREAKDOWN_LABELS = mapOf(
             "bonus_proteines" to R.string.breakdown_bonus_proteines,
             "bonus_fibres" to R.string.breakdown_bonus_fibres,

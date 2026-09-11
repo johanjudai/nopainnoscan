@@ -312,5 +312,14 @@
             android:padding="8dp"
             android:text="@string/main_recent_empty"
             android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnMoreHistory"
+            style="@style/Widget.NoPainNoScan.Button.Tonal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/main_history_more"
+            android:visibility="gone" />
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

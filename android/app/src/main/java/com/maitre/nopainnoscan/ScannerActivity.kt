@@ -111,7 +111,12 @@ class ScannerActivity : AppCompatActivity() {
         setContentView(binding.root)
         prefs = AppPrefs(this)
         cameraExecutor = Executors.newSingleThreadExecutor()
-        renderer = ResultRenderer(this, binding.result, layoutInflater) { ProductActivity.open(this, it) }
+        renderer = ResultRenderer(
+            this, binding.result, layoutInflater,
+            onAlternativeClick = { ProductActivity.open(this, it) },
+            scope = lifecycleScope,
+            mealLoader = { id, grams -> ApiClient.get(this).meal(id, grams) },
+        )
 
         // Caméra sous la barre d'état : on décale les puces et la feuille des insets système.
         WindowCompat.setDecorFitsSystemWindows(window, false)
