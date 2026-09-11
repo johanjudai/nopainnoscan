@@ -170,6 +170,7 @@
     <string name="meal_portion_sub">%1$d kcal · %2$s g prot. · %3$s g gluc. · %4$s g lip.</string>
     <string name="meal_quantity_hint">Quantité</string>
     <string name="unit_ml">ml</string>
+    <string name="meal_server_outdated">Le serveur ne sait pas encore recalculer une quantité : mets-le à jour (git pull, docker compose up -d --build).</string>
     <string name="main_history_more">Voir plus d\'anciens scans</string>
     <string name="meal_complement">+ %1$d g de %2$s (%3$d kcal · %4$s g prot.)</string>
     <string name="meal_extra">+ %1$s</string>
